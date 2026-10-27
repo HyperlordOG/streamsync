@@ -1,0 +1,17 @@
+{
+  "name": "@streamsync/extension",
+  "version": "1.0.0",
+  "description": "StreamSync - Watch Party Manifest V3 Browser Extension & Floating UI",
+  "type": "module",
+  "scripts": {
+    "build": "npx esbuild src/content/index.js --bundle --outfile=dist/content.bundle.js --format=iife && npx esbuild src/bridge/inject.js --bundle --outfile=dist/bridge.bundle.js --format=iife",
+    "watch": "npx esbuild src/content/index.js --bundle --outfile=dist/content.bundle.js --format=iife --watch"
+  },
+  "dependencies": {
+    "@streamsync/sync-engine": "file:../../packages/sync-engine",
+    "@streamsync/injectors": "file:../../packages/injectors"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

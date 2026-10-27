@@ -1,0 +1,488 @@
+/**
+ * StreamSync - Movie Browser Component
+ * ES Module: Search, browse, and select movies/TV shows with TMDB metadata.
+ */
+
+export class MovieBrowser {
+  /**
+   * @param {HTMLElement} container
+   * @param {(movie: object) => void} onMovieSelect
+   * @param {object} options
+   */
+  constructor(container, onMovieSelect, options = {}) {
+    this.container = container;
+    this.onMovieSelect = onMovieSelect;
+    this.isHost = options.isHost ?? true;
+    this.sharedControls = options.sharedControls ?? true;
+    this.debounceTimer = null;
+    this.currentCategory = 'trending';
+    this.movies = [];
+
+    this.injectStyles();
+    this.renderShell();
+    this.bindEvents();
+  }
+
+  injectStyles() {
+    if (document.getElementById('streamsync-browser-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'streamsync-browser-styles';
+    style.textContent = `
+      .sb-browser {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: #0d0d0d;
+        color: #f8fafc;
+        font-family: 'Inter', -apple-system, sans-serif;
+        overflow: hidden;
+      }
+      .sb-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(13, 13, 13, 0.95);
+        backdrop-filter: blur(12px);
+      }
+      .sb-search-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .sb-search-icon {
+        position: absolute;
+        left: 14px;
+        color: #64748b;
+        pointer-events: none;
+      }
+      .sb-search-input {
+        width: 100%;
+        padding: 12px 16px 12px 42px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        color: #fff;
+        font-size: 14px;
+        outline: none;
+        transition: all 0.2s ease;
+      }
+      .sb-search-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+        background: rgba(255, 255, 255, 0.09);
+      }
+      .sb-genres {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+      .sb-genres::-webkit-scrollbar { height: 4px; }
+      .sb-genres::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+      .sb-genre-chip {
+        padding: 6px 14px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+      }
+      .sb-genre-chip:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .sb-genre-chip.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #fff;
+        box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+      }
+      .sb-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 24px;
+      }
+      .sb-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 16px;
+      }
+      .movie-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        display: flex;
+        flex-direction: column;
+      }
+      .movie-card:hover {
+        transform: translateY(-4px);
+        border-color: #3b82f6;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(59, 130, 246, 0.2);
+      }
+      .movie-card img {
+        width: 100%;
+        aspect-ratio: 2/3;
+        object-fit: cover;
+        background: #1e293b;
+        display: block;
+      }
+      .movie-info {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .movie-info .title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #f1f5f9;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .movie-info .meta-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #94a3b8;
+      }
+      .movie-info .rating {
+        color: #f59e0b;
+        font-weight: 600;
+      }
+      /* Detail Modal */
+      .sb-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(12px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+      }
+      .sb-modal-backdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .sb-modal {
+        background: #141721;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 680px;
+        overflow: hidden;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.8);
+        transform: scale(0.95);
+        transition: transform 0.25s ease;
+        position: relative;
+      }
+      .sb-modal-backdrop.open .sb-modal {
+        transform: scale(1);
+      }
+      .sb-modal-hero {
+        height: 220px;
+        position: relative;
+        background-size: cover;
+        background-position: center;
+      }
+      .sb-modal-hero::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, #141721 0%, transparent 100%);
+      }
+      .sb-modal-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10;
+      }
+      .sb-modal-body {
+        padding: 24px;
+        position: relative;
+      }
+      .sb-modal-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #fff;
+      }
+      .sb-modal-meta {
+        display: flex;
+        gap: 12px;
+        font-size: 13px;
+        color: #94a3b8;
+        margin: 8px 0 16px;
+        align-items: center;
+      }
+      .sb-modal-genres {
+        display: flex;
+        gap: 6px;
+      }
+      .sb-modal-genre {
+        padding: 2px 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .sb-modal-overview {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #cbd5e1;
+        margin-bottom: 24px;
+      }
+      .sb-modal-actions {
+        display: flex;
+        gap: 12px;
+      }
+      .sb-btn-watch {
+        flex: 1;
+        padding: 14px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        border: none;
+        border-radius: 10px;
+        color: #fff;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+        transition: all 0.15s ease;
+      }
+      .sb-btn-watch:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+      }
+      .sb-btn-watch:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .sb-disabled-tip {
+        font-size: 12px;
+        color: #ef4444;
+        text-align: center;
+        margin-top: 8px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  renderShell() {
+    this.container.innerHTML = `
+      <div class="sb-browser">
+        <div class="sb-header">
+          <div class="sb-search-wrap">
+            <svg class="sb-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" class="sb-search-input" placeholder="Search movies or TV shows..." autofocus />
+          </div>
+          <div class="sb-genres">
+            <button class="sb-genre-chip active" data-genre="trending">🔥 Trending</button>
+            <button class="sb-genre-chip" data-genre="action">Action</button>
+            <button class="sb-genre-chip" data-genre="comedy">Comedy</button>
+            <button class="sb-genre-chip" data-genre="drama">Drama</button>
+            <button class="sb-genre-chip" data-genre="scifi">Sci-Fi</button>
+            <button class="sb-genre-chip" data-genre="horror">Horror</button>
+            <button class="sb-genre-chip" data-genre="animation">Animation</button>
+          </div>
+        </div>
+        <div class="sb-content">
+          <div class="sb-grid" id="sb-grid"></div>
+        </div>
+      </div>
+      <div class="sb-modal-backdrop" id="sb-detail-modal"></div>
+    `;
+  }
+
+  bindEvents() {
+    const input = this.container.querySelector('.sb-search-input');
+    input.addEventListener('input', (e) => {
+      const q = e.target.value.trim();
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => {
+        if (q.length > 0) {
+          this.search(q);
+        } else {
+          this.fetchTrending();
+        }
+      }, 400);
+    });
+
+    const chips = this.container.querySelectorAll('.sb-genre-chip');
+    chips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        chips.forEach((c) => c.classList.remove('active'));
+        chip.classList.add('active');
+        const genre = chip.getAttribute('data-genre');
+        if (genre === 'trending') {
+          this.fetchTrending();
+        } else {
+          this.search(genre);
+        }
+      });
+    });
+  }
+
+  async init() {
+    await this.fetchTrending();
+  }
+
+  async fetchTrending() {
+    try {
+      const res = await fetch('/api/media/trending');
+      const data = await res.json();
+      this.movies = data || [];
+      this.renderGrid(this.movies);
+    } catch (err) {
+      console.error('[MovieBrowser] Failed to fetch trending:', err);
+    }
+  }
+
+  async search(query) {
+    try {
+      const res = await fetch(`/api/media/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      this.movies = data || [];
+      this.renderGrid(this.movies);
+    } catch (err) {
+      console.error('[MovieBrowser] Search failed:', err);
+    }
+  }
+
+  renderGrid(movies) {
+    const grid = this.container.querySelector('#sb-grid');
+    if (!movies || movies.length === 0) {
+      grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 48px;">No movies found. Try another search.</div>`;
+      return;
+    }
+
+    grid.innerHTML = movies
+      .map(
+        (m) => `
+        <div class="movie-card" data-tmdb-id="${m.tmdbId}" data-type="${m.type}">
+          <img src="${m.poster || 'https://via.placeholder.com/300x450/1e293b/94a3b8?text=No+Poster'}" loading="lazy" alt="${escapeHtml(m.title)}" />
+          <div class="movie-info">
+            <span class="title">${escapeHtml(m.title)}</span>
+            <div class="meta-row">
+              <span class="year">${m.year || 'N/A'}</span>
+              <span class="rating">⭐ ${m.rating || 'N/A'}</span>
+            </div>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+
+    grid.querySelectorAll('.movie-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const id = card.getAttribute('data-tmdb-id');
+        const type = card.getAttribute('data-type');
+        this.renderDetail(id, type);
+      });
+    });
+  }
+
+  async renderDetail(tmdbId, type) {
+    const modalBackdrop = this.container.querySelector('#sb-detail-modal');
+    modalBackdrop.innerHTML = `
+      <div class="sb-modal">
+        <div style="padding: 48px; text-align: center; color: #94a3b8;">Loading movie details...</div>
+      </div>
+    `;
+    modalBackdrop.classList.add('open');
+
+    try {
+      const res = await fetch(`/api/media/${type}/${tmdbId}`);
+      const d = await res.json();
+
+      const canSelect = this.isHost || this.sharedControls;
+
+      modalBackdrop.innerHTML = `
+        <div class="sb-modal">
+          <button class="sb-modal-close" id="sb-modal-close-btn">&times;</button>
+          <div class="sb-modal-hero" style="background-image: url('${d.backdrop || d.poster}')"></div>
+          <div class="sb-modal-body">
+            <h2 class="sb-modal-title">${escapeHtml(d.title)}</h2>
+            <div class="sb-modal-meta">
+              <span>📅 ${d.year || 'N/A'}</span>
+              <span>⭐ ${d.rating}</span>
+              ${d.runtime ? `<span>⏱️ ${d.runtime} min</span>` : ''}
+              <div class="sb-modal-genres">
+                ${(d.genres || []).map((g) => `<span class="sb-modal-genre">${escapeHtml(g)}</span>`).join('')}
+              </div>
+            </div>
+            <p class="sb-modal-overview">${escapeHtml(d.overview || 'No synopsis available.')}</p>
+            ${d.cast?.length ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 20px;">Starring: ${escapeHtml(d.cast.join(', '))}</div>` : ''}
+            <div class="sb-modal-actions">
+              <button class="sb-btn-watch" id="sb-btn-watch" ${!canSelect ? 'disabled' : ''}>
+                <span>🎬 Watch Together</span>
+              </button>
+            </div>
+            ${!canSelect ? `<div class="sb-disabled-tip">Only the host can change the movie in this party</div>` : ''}
+          </div>
+        </div>
+      `;
+
+      modalBackdrop.querySelector('#sb-modal-close-btn').addEventListener('click', () => {
+        modalBackdrop.classList.remove('open');
+      });
+
+      const watchBtn = modalBackdrop.querySelector('#sb-btn-watch');
+      if (watchBtn && canSelect) {
+        watchBtn.addEventListener('click', () => {
+          modalBackdrop.classList.remove('open');
+          this.selectMovie(d);
+        });
+      }
+    } catch (err) {
+      modalBackdrop.innerHTML = `
+        <div class="sb-modal" style="padding: 24px; text-align: center;">
+          <p style="color: #ef4444;">Failed to load details.</p>
+          <button class="sb-modal-close" onclick="this.closest('.sb-modal-backdrop').classList.remove('open')">&times;</button>
+        </div>
+      `;
+    }
+  }
+
+  selectMovie(movie) {
+    if (this.onMovieSelect) {
+      this.onMovieSelect(movie);
+    }
+  }
+
+  setPermissions(isHost, sharedControls) {
+    this.isHost = isHost;
+    this.sharedControls = sharedControls;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}

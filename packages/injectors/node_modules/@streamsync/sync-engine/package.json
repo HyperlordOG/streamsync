@@ -1,0 +1,30 @@
+{
+  "name": "@streamsync/sync-engine",
+  "version": "1.0.0",
+  "description": "StreamSync - NTP Virtual Timeline and Dual-Threshold Drift Correction Engine",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./clock": "./src/clock.js",
+    "./timeline": "./src/timeline.js",
+    "./drift": "./src/drift.js",
+    "./adapter": "./src/adapter/base.js",
+    "./adapter/html5": "./src/adapter/html5.js",
+    "./adapter/mock": "./src/adapter/mock.js",
+    "./client": "./src/client.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "sync",
+    "video-sync",
+    "ntp",
+    "virtual-timeline",
+    "watch-party",
+    "hearo"
+  ],
+  "author": "StreamSync",
+  "license": "MIT"
+}

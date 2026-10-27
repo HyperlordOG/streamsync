@@ -1,0 +1,31 @@
+{
+  "name": "@streamsync/injectors",
+  "version": "1.0.0",
+  "description": "StreamSync - Streaming Service Player Injectors for Netflix, Prime Video, YouTube, and Universal Streams",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./netflix": "./src/netflix/index.js",
+    "./prime": "./src/prime/index.js",
+    "./youtube": "./src/youtube/index.js",
+    "./universal": "./src/universal/index.js",
+    "./bridge": "./src/bridge/index.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@streamsync/sync-engine": "file:../sync-engine"
+  },
+  "keywords": [
+    "netflix",
+    "prime-video",
+    "youtube",
+    "player-adapter",
+    "injector",
+    "watch-party"
+  ],
+  "author": "StreamSync",
+  "license": "MIT"
+}

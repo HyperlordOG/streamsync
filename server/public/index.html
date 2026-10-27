@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StreamSync — Synchronized Watch Party Theater</title>
+  <meta name="description" content="Watch movies and streams together in sub-50ms synchronized lockstep across any phone, tablet, or laptop.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(15, 23, 42, 0.75);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.18);
+      --accent-primary: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.4);
+      --accent-secondary: #a855f7;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.12) 0px, transparent 50%);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Navbar */
+    .navbar {
+      height: 72px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(9, 13, 22, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      color: #fff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .brand-name {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #fff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .server-status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #4ade80;
+    }
+
+    .dot-pulse {
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #22c55e;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+      width: 100%;
+      flex: 1;
+    }
+
+    /* LOBBY VIEW */
+    .lobby-view {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin-top: 24px;
+    }
+
+    @media (max-width: 960px) {
+      .lobby-view { grid-template-columns: 1fr; }
+      .navbar { padding: 0 16px; }
+      .container { padding: 16px; }
+    }
+
+    .hero-banner {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px 20px 20px;
+    }
+
+    .hero-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(32px, 5vw, 52px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .hero-title span {
+      background: linear-gradient(135deg, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #818cf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .input-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .input-field {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .input-field:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .presets-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .preset-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      color: #cbd5e1;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #fff;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 12px;
+      padding: 14px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+      color: #fff;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .btn-primary:hover {
+      opacity: 0.94;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .room-code-input {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
+      letter-spacing: 6px;
+      text-align: center;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    /* Extension Banner */
+    .extension-banner {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.05));
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: 20px;
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .extension-banner { flex-direction: column; text-align: center; }
+    }
+
+    .banner-text h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
+
+    .banner-text p {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .code-pill {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #818cf8;
+      cursor: pointer;
+    }
+
+    /* THEATER VIEW (WATCH ROOM) */
+    .theater-view {
+      display: none;
+      grid-template-columns: 1fr 360px;
+      gap: 24px;
+      height: calc(100vh - 140px);
+    }
+
+    @media (max-width: 1080px) {
+      .theater-view {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+    }
+
+    /* Video Player Stage */
+    .player-stage {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .video-wrapper {
+      position: relative;
+      background: #000;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
+      border: 1px solid var(--border);
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+    }
+
+    /* Sync HUD Overlay */
+    .sync-hud {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 10;
+      font-size: 12px;
+    }
+
+    .sync-state-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+
+    .sync-state-pill.in_sync {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .sync-state-pill.slewing {
+      background: rgba(234, 179, 8, 0.15);
+      color: #facc15;
+      border: 1px solid rgba(234, 179, 8, 0.3);
+    }
+
+    .sync-state-pill.seeking {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .hud-stat {
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+
+    .hud-stat strong {
+      color: #fff;
+    }
+
+    /* DRM Streaming Service Bridge Card */
+    .drm-theater-card {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, #1e1b4b 0%, #090d16 85%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      text-align: center;
+      z-index: 5;
+    }
+
+    .drm-service-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(99, 102, 241, 0.2);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: #a5b4fc;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .drm-movie-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(22px, 3.2vw, 34px);
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 12px;
+      max-width: 650px;
+    }
+
+    .drm-description {
+      color: var(--text-muted);
+      font-size: 14px;
+      max-width: 540px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .drm-action-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .drm-launch-btn {
+      padding: 16px 32px;
+      font-size: 15px;
+      text-decoration: none;
+      box-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+    }
+
+    .drm-subtext {
+      font-size: 12px;
+      color: #94a3b8;
+      max-width: 480px;
+      line-height: 1.5;
+    }
+
+    /* Player Info Bar */
+    .player-info-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .movie-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .room-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .room-badge:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    .room-badge-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #fff;
+    }
+
+    /* Chat & Peers Sidebar */
+    .sidebar {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sidebar-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .peers-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+      overflow-x: auto;
+    }
+
+    .peer-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .peer-avatar.is-host::after {
+      content: '👑';
+      position: absolute;
+      top: -6px;
+      right: -4px;
+      font-size: 10px;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .chat-msg {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .chat-sender {
+      font-size: 11px;
+      font-weight: 700;
+      color: #818cf8;
+    }
+
+    .chat-text {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: #e2e8f0;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .typing-bar {
+      padding: 4px 16px;
+      font-size: 11px;
+      font-style: italic;
+      color: var(--text-muted);
+      min-height: 20px;
+    }
+
+    .chat-input-bar {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .chat-input:focus {
+      border-color: var(--accent-primary);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(40px);
+      background: rgba(16, 185, 129, 0.95);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 999;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* Slide-in Movie Browser Drawer */
+    .movie-browser-drawer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 440px;
+      max-width: 90vw;
+      height: 100vh;
+      background: #0d0d0d;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 20px 0 60px rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      transform: translateX(-100%);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .movie-browser-drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: #141414;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .drawer-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .drawer-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+
+    .drawer-close-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    #movie-browser-container {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* Host Browsing Overlay for Guests */
+    .host-browsing-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 13, 22, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+
+    .host-browsing-card {
+      text-align: center;
+      padding: 32px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      max-width: 400px;
+    }
+
+    .host-browsing-card h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin: 16px 0 8px;
+      color: #fff;
+    }
+
+    .host-browsing-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .browse-trigger-btn {
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .browse-trigger-btn:disabled,
+    .browse-trigger-btn.disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      filter: grayscale(1);
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="brand" onclick="location.href='/'">
+      <div class="brand-logo">S</div>
+      <span class="brand-name">StreamSync</span>
+    </div>
+
+    <div class="server-status-pill">
+      <span class="dot-pulse"></span>
+      <span id="server-status-label">RELAY SERVER ONLINE (:3001)</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- LOBBY VIEW -->
+    <div class="lobby-view" id="lobby-view">
+      <div class="hero-banner">
+        <h1 class="hero-title">Watch Movies Together.<br><span>Sub-Millisecond Lockstep.</span></h1>
+        <p class="hero-subtitle">Ultra-low latency NTP virtual timeline engine. Synchronize any web stream, HLS, MP4, or YouTube video between any mobile phone, tablet, or laptop.</p>
+      </div>
+
+      <!-- Create Room Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+          <h2 class="card-title">Create a Watch Room</h2>
+        </div>
+
+        <div>
+          <label class="input-label" for="host-name">Your Display Name</label>
+          <input type="text" class="input-field" id="host-name" value="Host" placeholder="e.g. Alex" />
+        </div>
+
+        <div>
+          <label class="input-label" for="video-url">Video Source URL (MP4 / HLS .m3u8)</label>
+          <input type="text" class="input-field" id="video-url" value="https://vjs.zencdn.net/v/oceans.mp4" placeholder="Paste .mp4 or .m3u8 URL" />
+        </div>
+
+        <div>
+          <label class="input-label">Quick Stream Presets</label>
+          <div class="presets-row" style="grid-template-columns: repeat(4, 1fr);">
+            <button class="preset-btn" onclick="setPreset('Oceans (Nature)', 'https://vjs.zencdn.net/v/oceans.mp4')">Oceans (MP4)</button>
+            <button class="preset-btn" onclick="setPreset('Sintel Movie', 'https://media.w3.org/2010/05/sintel/trailer.mp4')">Sintel (HD)</button>
+            <button class="preset-btn" onclick="setPreset('Big Buck Bunny', 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4')">Big Buck Bunny</button>
+            <button class="preset-btn" onclick="setPreset('HLS Adaptive', 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')">Mux (HLS .m3u8)</button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-create-room" onclick="handleCreateRoom()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Launch Watch Party
+        </button>
+      </div>
+
+      <!-- Join Room Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+          </div>
+          <h2 class="card-title">Join Existing Party</h2>
+        </div>
+
+        <div>
+          <label class="input-label" for="room-code-input">6-Character Room Code</label>
+          <input type="text" class="input-field room-code-input" id="room-code-input" maxlength="6" placeholder="676767" />
+        </div>
+
+        <div>
+          <label class="input-label" for="peer-name">Your Display Name</label>
+          <input type="text" class="input-field" id="peer-name" value="Friend" placeholder="e.g. Jordan" />
+        </div>
+
+        <button class="btn btn-secondary" onclick="handleJoinRoom()">
+          Enter Watch Party
+        </button>
+      </div>
+
+      <!-- Extension Info Banner -->
+      <div class="extension-banner">
+        <div class="banner-text">
+          <h3>Watching on Netflix or Prime Video?</h3>
+          <p>Load our lightweight Chrome/Brave/Edge extension from the project repo to inject the floating watch party widget directly into official streaming sites.</p>
+        </div>
+        <div class="code-pill" onclick="copyPath('streamsync/apps/extension')" title="Click to copy unpacked path">
+          Folder: <strong>streamsync/apps/extension</strong> 📋
+        </div>
+      </div>
+    </div>
+
+    <!-- THEATER VIEW -->
+    <div class="theater-view" id="theater-view">
+      <!-- Player Stage -->
+      <div class="player-stage">
+        <div class="video-wrapper">
+          <!-- Sync HUD -->
+          <div class="sync-hud">
+            <div class="sync-state-pill in_sync" id="hud-pill">
+              <span class="dot-pulse"></span>
+              <span id="hud-state-text">IN SYNC</span>
+            </div>
+            <span class="hud-stat">Drift: <strong id="hud-drift">0ms</strong></span>
+            <span class="hud-stat">Rate: <strong id="hud-rate">1.0x</strong></span>
+            <span class="hud-stat">RTT: <strong id="hud-rtt">0ms</strong></span>
+          </div>
+
+          <video id="media-player" controls playsinline></video>
+
+          <!-- Host Browsing Overlay (Guests see when host is selecting a movie) -->
+          <div id="host-browsing-overlay" class="host-browsing-overlay" style="display: none;">
+            <div class="host-browsing-card">
+              <div class="stream-loading-spinner" style="margin: 0 auto 16px;"></div>
+              <h3>Host is selecting a movie...</h3>
+              <p>Please wait while the party host browses titles in the theater catalog.</p>
+            </div>
+          </div>
+
+          <!-- DRM Protected Service Card (Netflix / Prime Video) -->
+          <div id="drm-theater-card" class="drm-theater-card" style="display: none;">
+            <div class="drm-service-badge" id="drm-service-badge">AMAZON PRIME VIDEO</div>
+            <h2 class="drm-movie-title" id="drm-movie-title">Prime Video Watch Party</h2>
+            <p class="drm-description">
+              Official streaming services (Prime Video & Netflix) protect media with Widevine DRM and cannot be decoded inside a generic HTML5 video element. StreamSync synchronizes your official Prime Video players across both profiles!
+            </p>
+            <div class="drm-action-box">
+              <a href="#" target="_blank" class="btn btn-primary drm-launch-btn" id="drm-launch-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Launch on Prime Video (Auto-Sync)
+              </a>
+              <div class="drm-subtext">
+                Click above to open this title on Prime Video in this profile. The StreamSync extension will hook into the player and lock in sync!
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info Bar -->
+        <div class="player-info-bar">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <button class="btn btn-primary browse-trigger-btn" id="btn-browse-movies" onclick="toggleMovieBrowser(true)" title="Browse movies & shows to watch together">
+              🎬 Browse Titles
+            </button>
+            <div>
+              <div class="movie-title" id="theater-title">Movie Playing</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Synchronized via StreamSync NTP Timeline Engine</div>
+            </div>
+          </div>
+
+          <div class="room-badge" onclick="copyRoomLink()" title="Click to copy invite link">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">ROOM:</span>
+            <span class="room-badge-code" id="theater-room-code">------</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar (Peers & Chat) -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">Room Chat</span>
+          <span style="font-size: 11px; color: var(--text-muted);" id="sidebar-peers-count">1 Watching</span>
+        </div>
+
+        <div class="peers-row" id="theater-peers-list"></div>
+
+        <div class="chat-messages" id="theater-messages">
+          <div class="chat-msg">
+            <span class="chat-sender">System</span>
+            <span class="chat-text">Welcome to StreamSync Theater! Share your room code with friends to stream together in sync.</span>
+          </div>
+        </div>
+
+        <div class="typing-bar" id="theater-typing"></div>
+
+        <div class="chat-input-bar">
+          <input type="text" class="chat-input" id="theater-chat-input" placeholder="Type a message..." maxlength="500" />
+          <button class="btn btn-primary" style="padding: 8px 14px;" onclick="sendTheaterChat()">Send</button>
+        </div>
+      </div>
+    </div>
+  <!-- Slide-in Movie Browser Panel (Left Sidebar) -->
+  <div class="movie-browser-drawer" id="movie-browser-panel">
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <span>🎬</span>
+        <span>Browse StreamSync Catalog</span>
+      </div>
+      <button class="drawer-close-btn" onclick="toggleMovieBrowser(false)" title="Close Browser">✕</button>
+    </div>
+    <div id="movie-browser-container"></div>
+  </div>
+
+  <div class="toast" id="toast">Invite Link Copied!</div>
+
+  <script type="module">
+    import { MovieBrowser } from './js/movie-browser.js';
+    import { PartyPlayer } from './js/party-player.js';
+
+    // ── StreamSync Browser Engine Client ──────────────────────────────────────────
+    let ws = null;
+    let clockOffset = 0;
+    let isCalibrated = false;
+    let bestRtt = 0;
+    let clockSamples = [];
+    let currentRoom = null;
+    let localUser = { id: 'u_' + Math.random().toString(36).slice(2, 8), name: 'Guest', isOwner: false };
+    let timeline = { started: null, paused: 0, rate: 1.0 };
+    let pingTimer = null;
+
+    let partyPlayer = null;
+    let movieBrowser = null;
+
+    const player = document.getElementById('media-player');
+
+    // Preset helper
+    function setPreset(title, url) {
+      document.getElementById('video-url').value = url;
+    }
+    window.setPreset = setPreset;
+
+    // Check URL parameters or pathname for auto-join
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      let code = params.get('party') || params.get('code');
+
+      // Also support direct route like /party/WLSY2K
+      if (!code) {
+        const match = window.location.pathname.match(/\/party\/([A-Za-z0-9_-]+)/);
+        if (match && match[1] && match[1] !== '676767') {
+          code = match[1];
+        }
+      }
+
+      if (code) {
+        const cleanCode = code.replace(/\s+/g, '').toUpperCase();
+        document.getElementById('room-code-input').value = cleanCode;
+        handleJoinRoom(cleanCode);
+      }
+    });
+
+    // Handle Create Room
+    async function handleCreateRoom() {
+      const name = document.getElementById('host-name').value.trim() || 'Host';
+      const url = document.getElementById('video-url').value.trim();
+      if (!url) return alert('Please enter a video URL');
+
+      localUser.name = name;
+      localUser.isOwner = true;
+
+      try {
+        const res = await fetch('/api/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: localUser.id,
+            display_name: name,
+            shared_controls: true,
+            video: {
+              url,
+              provider: url.includes('.m3u8') ? 'hls' : 'mp4',
+              title: url.split('/').pop().replace(/\.[^/.]+$/, '') || 'Stream',
+            }
+          })
+        });
+
+        const data = await res.json();
+        if (!data.party_id) throw new Error('Failed creating room');
+
+        enterTheater(data, url);
+      } catch (err) {
+        alert('Error creating room: ' + err.message);
+      }
+    }
+    window.handleCreateRoom = handleCreateRoom;
+
+    // Handle Join Room
+    async function handleJoinRoom(explicitCode) {
+      const rawCode = explicitCode || document.getElementById('room-code-input').value;
+      const code = (rawCode || '').replace(/\s+/g, '').trim().toUpperCase();
+      const name = document.getElementById('peer-name').value.trim() || 'Guest';
+      if (!code) return alert('Please enter a 6-character room code');
+
+      localUser.name = name;
+      localUser.isOwner = false;
+
+      try {
+        const res = await fetch('/api/join/' + code, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+
+        const data = await res.json();
+        if (!data.party_id) throw new Error(data.error || 'Room not found');
+
+        const videoUrl = data.video?.url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+        enterTheater(data, videoUrl);
+      } catch (err) {
+        alert('Error joining room: ' + err.message);
+      }
+    }
+    window.handleJoinRoom = handleJoinRoom;
+
+    // Switch to Theater View and connect WebSocket
+    function enterTheater(roomData, videoUrl) {
+      currentRoom = roomData;
+      document.getElementById('lobby-view').style.display = 'none';
+      document.getElementById('theater-view').style.display = 'grid';
+
+      document.getElementById('theater-room-code').textContent = roomData.short_id || '------';
+      document.getElementById('theater-title').textContent = roomData.video?.title || 'Video Stream';
+
+      const isDrmProvider = roomData.video?.provider === 'prime' || roomData.video?.provider === 'netflix';
+      const playerEl = document.getElementById('media-player');
+      const drmCardEl = document.getElementById('drm-theater-card');
+
+      if (isDrmProvider) {
+        playerEl.style.display = 'none';
+        drmCardEl.style.display = 'flex';
+
+        const providerName = roomData.video.provider === 'prime' ? 'Amazon Prime Video' : 'Netflix';
+        document.getElementById('drm-service-badge').textContent = `${providerName.toUpperCase()} WATCH PARTY`;
+        document.getElementById('drm-movie-title').textContent = roomData.video.title || `${providerName} Stream`;
+
+        const launchBtn = document.getElementById('drm-launch-btn');
+        const streamUrl = roomData.video.url || (roomData.video.provider === 'prime' ? 'https://www.primevideo.com' : 'https://www.netflix.com');
+        const sep = streamUrl.includes('?') ? '&' : '?';
+        launchBtn.href = `${streamUrl}${sep}streamsync_party=${roomData.short_id}`;
+        launchBtn.innerHTML = `
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Open Title on ${providerName}
+        `;
+      } else {
+        playerEl.style.display = 'block';
+        drmCardEl.style.display = 'none';
+      }
+
+      // Initialize PartyPlayer
+      partyPlayer = new PartyPlayer(player, {
+        wsSend: (msg) => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg));
+          }
+        },
+        getNtpNow: getNtpNow,
+        container: document.querySelector('.video-wrapper'),
+      });
+
+      if (!isDrmProvider && videoUrl) {
+        partyPlayer.attachStream(videoUrl, roomData.video?.subtitlesUrl).catch(() => {});
+      }
+
+      // Initialize Movie Browser
+      const movieContainer = document.getElementById('movie-browser-container');
+      if (!movieBrowser && movieContainer) {
+        movieBrowser = new MovieBrowser(movieContainer, async (movie) => {
+          toggleMovieBrowser(false);
+          if (partyPlayer) {
+            await partyPlayer.loadStream(movie);
+          }
+        });
+        movieBrowser.init();
+      }
+
+      // Host vs Guest control permissioning
+      updateControlPermissions();
+
+      // Connect WebSocket
+      connectWebSocket(roomData.party_id);
+    }
+
+    function updateControlPermissions() {
+      const browseBtn = document.getElementById('btn-browse-movies');
+      if (!browseBtn || !currentRoom) return;
+
+      const canControl = currentRoom.shared_controls !== false || localUser.isOwner;
+      if (!canControl) {
+        browseBtn.classList.add('disabled');
+        browseBtn.title = 'Only the host can change the movie';
+        browseBtn.onclick = () => alert('Only the host can change the movie in this room');
+      } else {
+        browseBtn.classList.remove('disabled');
+        browseBtn.title = 'Browse movies & shows to watch together';
+        browseBtn.onclick = () => toggleMovieBrowser(true);
+      }
+    }
+
+    // Toggle Movie Browser Panel (Slide-in Drawer)
+    function toggleMovieBrowser(open) {
+      const canControl = currentRoom?.shared_controls !== false || localUser.isOwner;
+      if (!canControl) {
+        alert('Only the host can change the movie in this party.');
+        return;
+      }
+
+      const panel = document.getElementById('movie-browser-panel');
+      if (!panel) return;
+      const isOpen = open !== undefined ? open : !panel.classList.contains('open');
+
+      if (isOpen) {
+        panel.classList.add('open');
+        // Host emits browsing: true
+        if (localUser.isOwner && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'party', party: { browsing: true } }));
+        }
+      } else {
+        panel.classList.remove('open');
+        // Host emits browsing: false
+        if (localUser.isOwner && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'party', party: { browsing: false } }));
+        }
+      }
+    }
+    window.toggleMovieBrowser = toggleMovieBrowser;
+
+    // Handle Host Browsing Overlay
+    function handleHostBrowsingChange(isBrowsing) {
+      const overlay = document.getElementById('host-browsing-overlay');
+      // Guests see overlay when host is browsing
+      if (!localUser.isOwner && overlay) {
+        overlay.style.display = isBrowsing ? 'flex' : 'none';
+      }
+    }
+
+    // WebSocket Connection & Protocol Handling
+    function connectWebSocket(partyId) {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/ws?party_id=${partyId}&user_id=${localUser.id}&display_name=${encodeURIComponent(localUser.name)}`;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        sendNtpPing();
+        if (pingTimer) clearInterval(pingTimer);
+        pingTimer = setInterval(sendNtpPing, 4000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleWsMessage(msg);
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        if (pingTimer) clearInterval(pingTimer);
+      };
+    }
+
+    // NTP Math
+    function sendNtpPing() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping', client_time: Date.now() }));
+      }
+    }
+
+    function handleWsMessage(msg) {
+      switch (msg.type) {
+        case 'pong':
+          const t0 = Number(msg.client_time);
+          const t1 = Number(msg.server_time);
+          const t3 = Date.now();
+          const rtt = Math.max(0, t3 - t0);
+          const offset = Math.round(t1 + (rtt / 2) - t3);
+
+          clockSamples.push({ rtt, offset });
+          if (clockSamples.length > 8) clockSamples.shift();
+
+          const sortedOffsets = clockSamples.map(s => s.offset).sort((a,b) => a - b);
+          clockOffset = sortedOffsets[Math.floor(sortedOffsets.length / 2)];
+          bestRtt = Math.min(...clockSamples.map(s => s.rtt));
+          isCalibrated = clockSamples.length >= 2;
+
+          document.getElementById('hud-rtt').textContent = `${bestRtt}ms`;
+          break;
+
+        case 'joined':
+          if (msg.party) {
+            if (msg.party.video && partyPlayer) partyPlayer.handleRemoteVideoChange(msg.party);
+            if (typeof msg.party.browsing === 'boolean') handleHostBrowsingChange(msg.party.browsing);
+          }
+          if (msg.sync && partyPlayer) partyPlayer.applySync(msg.sync);
+          if (Array.isArray(msg.peers)) updatePeers(msg.peers);
+          else if (Array.isArray(msg.users)) updatePeers(msg.users);
+          break;
+
+        case 'party': {
+          const partyPayload = msg.party || msg;
+          if (partyPayload.video && partyPlayer) {
+            partyPlayer.handleRemoteVideoChange(partyPayload);
+            if (partyPayload.video.title) {
+              document.getElementById('theater-title').textContent = partyPayload.video.title;
+            }
+          } else if (partyPayload.sync && partyPlayer) {
+            partyPlayer.applySync(partyPayload.sync);
+          }
+
+          if (typeof partyPayload.browsing === 'boolean') {
+            handleHostBrowsingChange(partyPayload.browsing);
+          }
+
+          if (Array.isArray(msg.users)) updatePeers(msg.users);
+          break;
+        }
+
+        case 'users':
+          if (Array.isArray(msg.users)) updatePeers(msg.users);
+          break;
+
+        case 'peer_join':
+        case 'peer_leave':
+          fetchPeers();
+          break;
+
+        case 'chat':
+          appendChatMessage(msg.display_name, msg.content);
+          break;
+
+        case 'typing':
+          const typingEl = document.getElementById('theater-typing');
+          typingEl.textContent = msg.is_typing ? `${msg.display_name} is typing...` : '';
+          break;
+      }
+    }
+
+    function getNtpNow() {
+      return Date.now() + clockOffset;
+    }
+
+    // Chat
+    function sendTheaterChat() {
+      const input = document.getElementById('theater-chat-input');
+      const text = input.value.trim();
+      if (!text || !ws) return;
+
+      ws.send(JSON.stringify({ type: 'chat', content: text }));
+      input.value = '';
+    }
+    window.sendTheaterChat = sendTheaterChat;
+
+    document.getElementById('theater-chat-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendTheaterChat();
+    });
+
+    function appendChatMessage(sender, text) {
+      const box = document.getElementById('theater-messages');
+      const item = document.createElement('div');
+      item.className = 'chat-msg';
+      item.innerHTML = `
+        <span class="chat-sender">${escapeHtml(sender)}</span>
+        <span class="chat-text">${escapeHtml(text)}</span>
+      `;
+      box.appendChild(item);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function updatePeers(peers) {
+      const list = document.getElementById('theater-peers-list');
+      const count = document.getElementById('sidebar-peers-count');
+      count.textContent = `${peers.length} Watching`;
+      list.innerHTML = '';
+
+      peers.forEach(peer => {
+        const avatar = document.createElement('div');
+        avatar.className = `peer-avatar ${peer.is_owner ? 'is-host' : ''}`;
+        avatar.title = peer.display_name;
+        avatar.textContent = (peer.display_name || 'U').slice(0, 1).toUpperCase();
+        list.appendChild(avatar);
+      });
+    }
+
+    async function fetchPeers() {
+      if (!currentRoom) return;
+      try {
+        const res = await fetch(`/api/party/${currentRoom.party_id}`);
+        const data = await res.json();
+        if (data.users) updatePeers(data.users);
+      } catch {}
+    }
+
+    // Copy Invite Link
+    function copyRoomLink() {
+      const code = document.getElementById('theater-room-code').textContent;
+      const link = `${location.origin}/?party=${code}`;
+      navigator.clipboard.writeText(link).then(() => {
+        showToast('Invite Link Copied to Clipboard!');
+      });
+    }
+    window.copyRoomLink = copyRoomLink;
+
+    function copyPath(p) {
+      navigator.clipboard.writeText(p);
+      showToast('Path Copied!');
+    }
+    window.copyPath = copyPath;
+
+    function showToast(text) {
+      const t = document.getElementById('toast');
+      t.textContent = text;
+      t.classList.add('show');
+      setTimeout(() => { t.classList.remove('show'); }, 2200);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  </script>
+</body>
+</html>

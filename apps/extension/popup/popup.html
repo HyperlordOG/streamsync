@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StreamSync</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="brand">
+        <div class="logo">S</div>
+        <div class="brand-text">
+          <h1>StreamSync</h1>
+          <span class="subtitle">Watch Party</span>
+        </div>
+      </div>
+      <div class="status-indicator" id="header-status" title="Server Status">
+        <span class="status-dot"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="popup-main">
+      <!-- Create Room Tab -->
+      <section class="card" id="card-create">
+        <h2>Start a Party</h2>
+        <p class="card-desc">Sync this movie with friends across any device.</p>
+        
+        <div class="input-group">
+          <label for="input-host-name">Your Name</label>
+          <input type="text" id="input-host-name" placeholder="Host" value="Host" />
+        </div>
+
+        <button class="btn btn-primary" id="btn-create-party">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Create Watch Party
+        </button>
+      </section>
+
+      <!-- Divider -->
+      <div class="divider"><span>OR</span></div>
+
+      <!-- Join Room Tab -->
+      <section class="card" id="card-join">
+        <h2>Join Existing Party</h2>
+        
+        <div class="input-group">
+          <label for="input-room-code">6-Character Room Code</label>
+          <input type="text" id="input-room-code" placeholder="e.g. 676767" maxlength="6" style="text-transform: uppercase; font-family: monospace; letter-spacing: 2px;" />
+        </div>
+
+        <div class="input-group">
+          <label for="input-guest-name">Your Name</label>
+          <input type="text" id="input-guest-name" placeholder="Guest" value="Guest" />
+        </div>
+
+        <button class="btn btn-secondary" id="btn-join-party">
+          Join Party
+        </button>
+      </section>
+
+      <!-- Active Session Status (hidden by default) -->
+      <section class="card active-session" id="card-active" style="display: none;">
+        <div class="session-badge">ACTIVE PARTY</div>
+        <div class="code-box">
+          <span class="code-label">Room Code</span>
+          <span class="code-val" id="active-code">------</span>
+        </div>
+        <button class="btn btn-secondary" id="btn-copy-active-link">Copy Invite Link</button>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <span id="detected-service">Service: Auto-detecting</span>
+      <span class="version">v1.0.0</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
