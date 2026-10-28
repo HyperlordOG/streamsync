@@ -161,13 +161,13 @@ export class MovieBrowser {
       .sb-modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.85);
-        backdrop-filter: blur(12px);
+        background: rgba(0, 0, 0, 0.88);
+        backdrop-filter: blur(14px);
         z-index: 1000;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 24px;
+        padding: 20px;
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.25s ease;
@@ -177,40 +177,48 @@ export class MovieBrowser {
         pointer-events: auto;
       }
       .sb-modal {
-        background: #141721;
+        background: #0d1117;
         border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 16px;
+        border-radius: 18px;
         width: 100%;
-        max-width: 680px;
-        overflow: hidden;
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.8);
+        max-width: 820px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9);
         transform: scale(0.95);
         transition: transform 0.25s ease;
         position: relative;
+      }
+      .sb-modal::-webkit-scrollbar {
+        width: 6px;
+      }
+      .sb-modal::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 3px;
       }
       .sb-modal-backdrop.open .sb-modal {
         transform: scale(1);
       }
       .sb-modal-hero {
-        height: 220px;
+        height: 260px;
         position: relative;
         background-size: cover;
-        background-position: center;
+        background-position: center 20%;
       }
       .sb-modal-hero::after {
         content: '';
         position: absolute;
         inset: 0;
-        background: linear-gradient(to top, #141721 0%, transparent 100%);
+        background: linear-gradient(to top, #0d1117 0%, rgba(13, 17, 23, 0.5) 50%, transparent 100%);
       }
       .sb-modal-close {
         position: absolute;
         top: 16px;
         right: 16px;
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
         border-radius: 50%;
-        background: rgba(0, 0, 0, 0.6);
+        background: rgba(0, 0, 0, 0.65);
         border: 1px solid rgba(255, 255, 255, 0.2);
         color: #fff;
         display: flex;
@@ -218,23 +226,72 @@ export class MovieBrowser {
         justify-content: center;
         cursor: pointer;
         z-index: 10;
+        font-size: 16px;
+        transition: all 0.2s ease;
+      }
+      .sb-modal-close:hover {
+        background: rgba(239, 68, 68, 0.8);
       }
       .sb-modal-body {
-        padding: 24px;
+        padding: 24px 28px;
         position: relative;
       }
-      .sb-modal-title {
-        font-size: 24px;
-        font-weight: 700;
-        color: #fff;
-      }
-      .sb-modal-meta {
+      .sb-modal-header-row {
         display: flex;
-        gap: 12px;
+        gap: 20px;
+        margin-top: -80px;
+        position: relative;
+        z-index: 5;
+        margin-bottom: 20px;
+      }
+      .sb-modal-poster {
+        width: 120px;
+        height: 180px;
+        border-radius: 10px;
+        object-fit: cover;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        flex-shrink: 0;
+      }
+      .sb-modal-title-col {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding-bottom: 6px;
+      }
+      .sb-modal-title {
+        font-size: 26px;
+        font-weight: 800;
+        color: #fff;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+      .sb-modal-meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
         font-size: 13px;
         color: #94a3b8;
-        margin: 8px 0 16px;
+        margin-top: 8px;
         align-items: center;
+      }
+      .sb-badge-rating {
+        background: #f59e0b;
+        color: #000;
+        font-weight: 700;
+        font-size: 11px;
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+      .sb-badge-type {
+        background: rgba(99, 102, 241, 0.2);
+        color: #818cf8;
+        border: 1px solid rgba(99, 102, 241, 0.4);
+        font-weight: 600;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 5px;
+        text-transform: uppercase;
       }
       .sb-modal-genres {
         display: flex;
@@ -245,16 +302,153 @@ export class MovieBrowser {
         background: rgba(255, 255, 255, 0.08);
         border-radius: 4px;
         font-size: 11px;
+        color: #cbd5e1;
       }
       .sb-modal-overview {
         font-size: 14px;
         line-height: 1.6;
         color: #cbd5e1;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
+      }
+      .sb-series-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+      }
+      .sb-series-tab {
+        padding: 8px 18px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #94a3b8;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+      }
+      .sb-series-tab:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .sb-series-tab.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #fff;
+        box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+      }
+      .sb-episodes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 14px;
+        margin-bottom: 20px;
+        max-height: 380px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .sb-episodes-grid::-webkit-scrollbar {
+        width: 4px;
+      }
+      .sb-episodes-grid::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 2px;
+      }
+      .sb-ep-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        transition: all 0.2s ease;
+        position: relative;
+      }
+      .sb-ep-card:hover {
+        transform: translateY(-3px);
+        border-color: #3b82f6;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(59, 130, 246, 0.25);
+      }
+      .sb-ep-card-thumb-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16/9;
+        background: #1e293b;
+        overflow: hidden;
+      }
+      .sb-ep-card-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .sb-ep-badge {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        color: #38bdf8;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+      .sb-ep-play-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .sb-ep-card:hover .sb-ep-play-overlay {
+        opacity: 1;
+      }
+      .sb-ep-play-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #3b82f6;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 14px rgba(59, 130, 246, 0.8);
+      }
+      .sb-ep-info {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+      }
+      .sb-ep-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #f1f5f9;
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .sb-ep-meta {
+        font-size: 11px;
+        color: #94a3b8;
+        display: flex;
+        justify-content: space-between;
+        margin-top: auto;
       }
       .sb-modal-actions {
         display: flex;
         gap: 12px;
+        margin-top: 10px;
       }
       .sb-btn-watch {
         flex: 1;
@@ -404,12 +598,13 @@ export class MovieBrowser {
       card.addEventListener('click', () => {
         const id = card.getAttribute('data-tmdb-id');
         const type = card.getAttribute('data-type');
-        this.renderDetail(id, type);
+        const item = (movies || []).find((m) => String(m.tmdbId) === String(id));
+        this.renderDetail(id, type, item);
       });
     });
   }
 
-  async renderDetail(tmdbId, type) {
+  async renderDetail(tmdbId, type, itemFallback = null) {
     const modalBackdrop = this.container.querySelector('#sb-detail-modal');
     modalBackdrop.innerHTML = `
       <div class="sb-modal">
@@ -419,33 +614,129 @@ export class MovieBrowser {
     modalBackdrop.classList.add('open');
 
     try {
-      const res = await fetch(`/api/media/${type}/${tmdbId}`);
-      const d = await res.json();
+      const base = itemFallback || (this.movies || []).find((m) => String(m.tmdbId) === String(tmdbId)) || {};
+      let d = null;
+      try {
+        const res = await fetch(`/api/media/${type || base.type || 'movie'}/${tmdbId}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json && !json.error) {
+            d = json;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('[MovieBrowser] Detail fetch error:', fetchErr);
+      }
+
+      // Merge backend details with baseline card data so titles/posters/tmdbIds are ALWAYS valid
+      d = {
+        tmdbId: Number(tmdbId),
+        type: d?.type || type || base.type || 'movie',
+        title: d?.title || base.title || `Media #${tmdbId}`,
+        year: d?.year || base.year || '',
+        rating: d?.rating || base.rating || 'N/A',
+        overview: d?.overview || base.overview || 'Available for synchronized party streaming.',
+        poster: d?.poster || base.poster || '',
+        backdrop: d?.backdrop || base.backdrop || d?.poster || base.poster || '',
+        cast: d?.cast || [],
+        runtime: d?.runtime || 0,
+        genres: d?.genres || [],
+        seasons: d?.seasons || (type === 'tv' ? [{ seasonNumber: 1, name: 'Season 1', episodes: [{ episodeNumber: 1, name: 'Episode 1' }] }] : []),
+        seasonsCount: d?.seasonsCount || (d?.seasons?.length || 1),
+        episodesCount: d?.episodesCount || 0,
+      };
 
       const canSelect = this.isHost || this.sharedControls;
+
+      const isTv = d.type === 'tv' || (Array.isArray(d.seasons) && d.seasons.length > 0);
+      const seasons = Array.isArray(d.seasons) ? d.seasons : [];
+      // Default to season 1 if available, otherwise first season
+      let selectedSeasonNumber = seasons.find((s) => s.seasonNumber === 1)?.seasonNumber ?? (seasons[0]?.seasonNumber || 1);
+
+      const renderEpisodesHtml = (sNum) => {
+        const curSeason = seasons.find((s) => s.seasonNumber === sNum);
+        if (!curSeason || !curSeason.episodes || curSeason.episodes.length === 0) {
+          return `<div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 24px;">No episodes listed for this season.</div>`;
+        }
+        return curSeason.episodes
+          .map((ep) => `
+            <div class="sb-ep-card" data-season="${sNum}" data-episode="${ep.episodeNumber}">
+              <div class="sb-ep-card-thumb-wrap">
+                <img class="sb-ep-card-thumb" src="${ep.still || d.backdrop || 'https://via.placeholder.com/320x180/1e293b/94a3b8?text=No+Still'}" loading="lazy" alt="S${sNum}E${ep.episodeNumber}" />
+                <span class="sb-ep-badge">E${String(ep.episodeNumber).padStart(2, '0')}</span>
+                <div class="sb-ep-play-overlay">
+                  <div class="sb-ep-play-btn">▶</div>
+                </div>
+              </div>
+              <div class="sb-ep-info">
+                <span class="sb-ep-title" title="${escapeHtml(ep.name)}">${ep.episodeNumber}. ${escapeHtml(ep.name)}</span>
+                <div class="sb-ep-meta">
+                  <span>${ep.airDate || 'N/A'}</span>
+                  <span>${ep.runtime ? `${ep.runtime}m` : '45m'}</span>
+                </div>
+              </div>
+            </div>
+          `)
+          .join('');
+      };
 
       modalBackdrop.innerHTML = `
         <div class="sb-modal">
           <button class="sb-modal-close" id="sb-modal-close-btn">&times;</button>
           <div class="sb-modal-hero" style="background-image: url('${d.backdrop || d.poster}')"></div>
           <div class="sb-modal-body">
-            <h2 class="sb-modal-title">${escapeHtml(d.title)}</h2>
-            <div class="sb-modal-meta">
-              <span>📅 ${d.year || 'N/A'}</span>
-              <span>⭐ ${d.rating}</span>
-              ${d.runtime ? `<span>⏱️ ${d.runtime} min</span>` : ''}
-              <div class="sb-modal-genres">
-                ${(d.genres || []).map((g) => `<span class="sb-modal-genre">${escapeHtml(g)}</span>`).join('')}
+            <div class="sb-modal-header-row">
+              <img class="sb-modal-poster" src="${d.poster || 'https://via.placeholder.com/300x450/1e293b/94a3b8?text=No+Poster'}" alt="${escapeHtml(d.title)}" />
+              <div class="sb-modal-title-col">
+                <h2 class="sb-modal-title">${escapeHtml(d.title)}</h2>
+                <div class="sb-modal-meta-row">
+                  <span class="sb-badge-type">${isTv ? 'TV Series' : 'Movie'}</span>
+                  <span class="sb-badge-rating">⭐ ${d.rating || 'N/A'}</span>
+                  <span>📅 ${d.year || 'N/A'}</span>
+                  ${d.runtime ? `<span>⏱️ ${d.runtime} min</span>` : ''}
+                  ${isTv && d.seasonsCount ? `<span>📦 ${d.seasonsCount} Seasons</span>` : ''}
+                  ${isTv && d.episodesCount ? `<span>🎞️ ${d.episodesCount} Episodes</span>` : ''}
+                </div>
+                <div class="sb-modal-genres" style="margin-top: 8px;">
+                  ${(d.genres || []).map((g) => `<span class="sb-modal-genre">${escapeHtml(g)}</span>`).join('')}
+                </div>
               </div>
             </div>
+
             <p class="sb-modal-overview">${escapeHtml(d.overview || 'No synopsis available.')}</p>
-            ${d.cast?.length ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 20px;">Starring: ${escapeHtml(d.cast.join(', '))}</div>` : ''}
+            ${d.cast?.length ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 16px;">Starring: ${escapeHtml(d.cast.join(', '))}</div>` : ''}
+
+            ${
+              isTv && seasons.length > 0
+                ? `
+              <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+                <span>Select Season & Episode</span>
+                <span style="font-size: 12px; font-weight: 500; color: #94a3b8;">Click any episode to start streaming in sync</span>
+              </div>
+              <div class="sb-series-tabs" id="sb-series-tabs">
+                ${seasons
+                  .map(
+                    (s) => `
+                  <button class="sb-series-tab ${s.seasonNumber === selectedSeasonNumber ? 'active' : ''}" data-season-num="${s.seasonNumber}">
+                    ${escapeHtml(s.name || `Season ${s.seasonNumber}`)}
+                  </button>
+                `
+                  )
+                  .join('')}
+              </div>
+              <div class="sb-episodes-grid" id="sb-episodes-grid">
+                ${renderEpisodesHtml(selectedSeasonNumber)}
+              </div>
+            `
+                : ''
+            }
+
             <div class="sb-modal-actions">
               <button class="sb-btn-watch" id="sb-btn-watch" ${!canSelect ? 'disabled' : ''}>
-                <span>🎬 Watch Together</span>
+                <span>🎬 ${isTv ? 'Play S01 E01 (Pilot)' : 'Watch Together'}</span>
               </button>
             </div>
-            ${!canSelect ? `<div class="sb-disabled-tip">Only the host can change the movie in this party</div>` : ''}
+            ${!canSelect ? `<div class="sb-disabled-tip">Only the host can change the media in this party</div>` : ''}
           </div>
         </div>
       `;
@@ -454,17 +745,74 @@ export class MovieBrowser {
         modalBackdrop.classList.remove('open');
       });
 
+      // Bind season tab clicks
+      if (isTv && seasons.length > 0) {
+        const tabsContainer = modalBackdrop.querySelector('#sb-series-tabs');
+        const epGrid = modalBackdrop.querySelector('#sb-episodes-grid');
+
+        const bindEpClicks = () => {
+          epGrid.querySelectorAll('.sb-ep-card').forEach((card) => {
+            card.addEventListener('click', () => {
+              if (!canSelect) {
+                alert('Only the host can change the episode in this party');
+                return;
+              }
+              const sNum = Number(card.getAttribute('data-season'));
+              const epNum = Number(card.getAttribute('data-episode'));
+              const curSeason = seasons.find((s) => s.seasonNumber === sNum);
+              const curEp = curSeason?.episodes?.find((e) => e.episodeNumber === epNum);
+
+              modalBackdrop.classList.remove('open');
+              this.selectMovie({
+                ...d,
+                type: 'tv',
+                season: sNum,
+                episode: epNum,
+                title: `${d.title} - S${String(sNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}${curEp ? ' - ' + curEp.name : ''}`,
+                episodeTitle: curEp?.name || `Episode ${epNum}`,
+                poster: curEp?.still || d.poster,
+              });
+            });
+          });
+        };
+
+        tabsContainer.querySelectorAll('.sb-series-tab').forEach((tab) => {
+          tab.addEventListener('click', () => {
+            tabsContainer.querySelectorAll('.sb-series-tab').forEach((t) => t.classList.remove('active'));
+            tab.classList.add('active');
+            selectedSeasonNumber = Number(tab.getAttribute('data-season-num'));
+            epGrid.innerHTML = renderEpisodesHtml(selectedSeasonNumber);
+            bindEpClicks();
+          });
+        });
+
+        bindEpClicks();
+      }
+
       const watchBtn = modalBackdrop.querySelector('#sb-btn-watch');
       if (watchBtn && canSelect) {
         watchBtn.addEventListener('click', () => {
           modalBackdrop.classList.remove('open');
-          this.selectMovie(d);
+          if (isTv) {
+            const firstSeason = seasons[0];
+            const firstEp = firstSeason?.episodes?.[0];
+            this.selectMovie({
+              ...d,
+              type: 'tv',
+              season: firstSeason?.seasonNumber || 1,
+              episode: firstEp?.episodeNumber || 1,
+              title: `${d.title} - S01E01${firstEp ? ' - ' + firstEp.name : ''}`,
+              episodeTitle: firstEp?.name || 'Episode 1',
+            });
+          } else {
+            this.selectMovie(d);
+          }
         });
       }
     } catch (err) {
       modalBackdrop.innerHTML = `
         <div class="sb-modal" style="padding: 24px; text-align: center;">
-          <p style="color: #ef4444;">Failed to load details.</p>
+          <p style="color: #ef4444;">Failed to load details: ${escapeHtml(err.message)}</p>
           <button class="sb-modal-close" onclick="this.closest('.sb-modal-backdrop').classList.remove('open')">&times;</button>
         </div>
       `;

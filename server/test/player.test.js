@@ -221,4 +221,44 @@ describe('PartyPlayer Client & Sync Integration', () => {
     hostPlayer.destroy();
     guestPlayer.destroy();
   });
+
+  test('seekAbsolute and playback math does not double-count position or create runaway drift', () => {
+    let mockNtpTime = 1700000050000;
+    const getNtpNow = () => mockNtpTime;
+    const video = new MockVideoElement();
+    const emitted = [];
+    const player = new PartyPlayer(video, {
+      wsSend: (msg) => emitted.push(msg),
+      getNtpNow
+    });
+
+    // 1. Seek to 8 seconds while playing
+    video.paused = false;
+    player.seekAbsolute(8);
+
+    assert.equal(video.currentTime, 8);
+    // Position should be 8000ms
+    const posAtSeek = player.getDesiredPositionMs();
+    assert.equal(posAtSeek, 8000, `Desired position at seek must be 8000ms, got ${posAtSeek}ms`);
+
+    // 2. Advance time by 2 seconds (NTP + 2000ms)
+    mockNtpTime += 2000;
+    video.currentTime = 10; // Video advanced 2 seconds naturally
+
+    // Desired position must be 10000ms (NOT 18000ms or 20000ms!)
+    const posAfter2s = player.getDesiredPositionMs();
+    assert.equal(posAfter2s, 10000, `Desired position after 2s must be 10000ms, got ${posAfter2s}ms`);
+
+    // 3. checkDrift must detect 0ms drift and NOT trigger seek action
+    player.isHlsManifestLoaded = true;
+    video.readyState = 4;
+    video.duration = 7200; // 2 hour movie
+    player.checkDrift();
+
+    // video.currentTime must remain at 10 (no jump)
+    assert.equal(video.currentTime, 10, 'Video currentTime must not jump or runaway during checkDrift');
+
+    player.destroy();
+  });
 });
+

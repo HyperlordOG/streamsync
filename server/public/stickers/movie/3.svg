@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <circle cx="100" cy="100" r="75" fill="#FACC15" stroke="#111827" stroke-width="6"/>
+  <!-- Eyebrows -->
+  <path d="M 60,65 Q 75,55 90,65" fill="none" stroke="#111827" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 110,65 Q 125,55 140,65" fill="none" stroke="#111827" stroke-width="6" stroke-linecap="round"/>
+  <!-- Squinted Laughing Eyes -->
+  <path d="M 55,85 Q 75,100 95,85" fill="none" stroke="#111827" stroke-width="7" stroke-linecap="round"/>
+  <path d="M 105,85 Q 125,100 145,85" fill="none" stroke="#111827" stroke-width="7" stroke-linecap="round"/>
+  <!-- Big Laughing Open Mouth -->
+  <path d="M 60,110 C 60,165 140,165 140,110 Z" fill="#641E16" stroke="#111827" stroke-width="6"/>
+  <!-- Teeth -->
+  <path d="M 62,110 Q 100,125 138,110" fill="#FFFFFF" stroke="#111827" stroke-width="4"/>
+  <!-- Tongue -->
+  <ellipse cx="100" cy="148" rx="22" ry="12" fill="#F87171"/>
+  <!-- Tears of Joy Streaming Out -->
+  <path d="M 45,95 C 25,100 25,120 42,125 C 55,128 55,100 45,95 Z" fill="#38BDF8" stroke="#111827" stroke-width="4"/>
+  <path d="M 155,95 C 175,100 175,120 158,125 C 145,128 145,100 155,95 Z" fill="#38BDF8" stroke="#111827" stroke-width="4"/>
+</svg>

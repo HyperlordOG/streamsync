@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import { mediaRoutes } from '../src/routes/media.js';
 
-describe('StreamSync - Streamo Streaming Pipeline Integration', () => {
+describe('StreamSync - Streamo Streaming Pipeline Integration', { concurrency: 1 }, () => {
   let app;
   let originalFetch;
 

@@ -66,10 +66,18 @@ export function createRoom({ creator_id, display_name, shared_controls = true, v
       thumbnail: '',
     },
     sync: {
+      status: 'PAUS',
+      position: 0,
+      time: Date.now(),
       started: null,
       paused: 0,
+      rate: 1.0,
     },
     browsing: false,
+    tracks: {
+      subtitle: null,
+      audio: null,
+    },
     peers: new Map(),
     created_at: Date.now(),
   };
@@ -146,7 +154,24 @@ export function updateSync(party_id, sync) {
 export function updateVideo(party_id, video) {
   const room = rooms.get(party_id);
   if (!room) return;
+  const isDifferent = !room.video ||
+    room.video.url !== video.url ||
+    room.video.tmdbId !== video.tmdbId ||
+    room.video.season !== video.season ||
+    room.video.episode !== video.episode;
+
   Object.assign(room.video, video);
+
+  if (isDifferent) {
+    room.sync = {
+      status: 'PAUS',
+      position: 0,
+      time: Date.now(),
+      started: null,
+      paused: 0,
+      rate: 1.0,
+    };
+  }
 }
 
 /**
@@ -181,6 +206,7 @@ export function roomSnapshot(room) {
     browsing: room.browsing ?? false,
     video: room.video,
     sync: room.sync,
+    tracks: room.tracks ?? { subtitle: null, audio: null },
     users: [...room.peers.values()].map(({ user }) => user),
   };
 }

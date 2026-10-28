@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Cranium -->
+  <path d="M 45,95 C 45,50 70,30 100,30 C 130,30 155,50 155,95 C 155,120 145,135 135,145 L 130,175 L 70,175 L 65,145 C 55,135 45,120 45,95 Z" fill="#F8FAFC" stroke="#111827" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Eye Sockets -->
+  <ellipse cx="75" cy="100" rx="16" ry="20" fill="#0F172A" stroke="#111827" stroke-width="4"/>
+  <ellipse cx="125" cy="100" rx="16" ry="20" fill="#0F172A" stroke="#111827" stroke-width="4"/>
+  <!-- Nose Cavity -->
+  <path d="M 100,120 L 92,135 L 108,135 Z" fill="#0F172A"/>
+  <!-- Teeth / Jaw slits -->
+  <line x1="85" y1="155" x2="85" y2="175" stroke="#111827" stroke-width="5" stroke-linecap="round"/>
+  <line x1="100" y1="155" x2="100" y2="175" stroke="#111827" stroke-width="5" stroke-linecap="round"/>
+  <line x1="115" y1="155" x2="115" y2="175" stroke="#111827" stroke-width="5" stroke-linecap="round"/>
+</svg>

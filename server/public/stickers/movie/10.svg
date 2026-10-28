@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Hand Wrist and Palm -->
+  <path d="M 85,185 L 85,150 C 70,140 60,115 65,95 C 70,75 88,50 98,35 C 102,30 108,30 112,35 C 122,50 140,75 145,95 C 150,115 140,140 125,150 L 125,185 Z" fill="#FACC15" stroke="#111827" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Pinched Fingers Creases -->
+  <path d="M 98,35 C 95,65 95,95 85,120" fill="none" stroke="#111827" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 112,35 C 115,65 115,95 125,120" fill="none" stroke="#111827" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 105,45 L 105,85" fill="none" stroke="#CA8A04" stroke-width="4" stroke-linecap="round"/>
+  <!-- Motion Vibe Accents -->
+  <path d="M 45,60 Q 55,45 65,55" fill="none" stroke="#FBBF24" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 155,60 Q 145,45 135,55" fill="none" stroke="#FBBF24" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -50,12 +50,27 @@ async function bootstrap() {
   await fastify.register(fastifyStatic, {
     root: PUBLIC_DIR,
     prefix: '/',
+    setHeaders: (reply, filePath) => {
+      // Aggressive caching for static sticker assets
+      if (filePath && filePath.includes('stickers')) {
+        reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
   });
 
   await fastify.register(fastifyWebsocket);
 
   // ── Web App Routes ────────────────────────────────────────────────────────
   fastify.get('/party/:id', async (req, reply) => {
+    return reply.sendFile('index.html');
+  });
+
+  fastify.get('/room/:id', async (req, reply) => {
+    return reply.sendFile('index.html');
+  });
+
+  // Short 6-character room codes directly in the path (e.g. /H7L3EX)
+  fastify.get('/:id([A-Za-z0-9]{6})', async (req, reply) => {
     return reply.sendFile('index.html');
   });
 

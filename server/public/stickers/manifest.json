@@ -1,0 +1,23 @@
+[
+  {
+    "packId": "movie",
+    "name": "Cinema & Popcorn",
+    "preview": "/stickers/movie/0.svg",
+    "count": 12,
+    "stickers": [
+      { "id": 0, "name": "Popcorn", "file": "0.svg" },
+      { "id": 1, "name": "Clap", "file": "1.svg" },
+      { "id": 2, "name": "Shocked", "file": "2.svg" },
+      { "id": 3, "name": "Crying Laughing", "file": "3.svg" },
+      { "id": 4, "name": "Heart", "file": "4.svg" },
+      { "id": 5, "name": "Fire", "file": "5.svg" },
+      { "id": 6, "name": "Skull", "file": "6.svg" },
+      { "id": 7, "name": "Eyes", "file": "7.svg" },
+      { "id": 8, "name": "Mind Blown", "file": "8.svg" },
+      { "id": 9, "name": "Sleeping", "file": "9.svg" },
+      { "id": 10, "name": "Italian Hand", "file": "10.svg" },
+      { "id": 11, "name": "Clapperboard", "file": "11.svg" }
+    ]
+  }
+]
+

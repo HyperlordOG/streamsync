@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Left Eyeball -->
+  <ellipse cx="65" cy="100" rx="35" ry="45" fill="#FFFFFF" stroke="#111827" stroke-width="7"/>
+  <!-- Left Iris & Pupil -->
+  <ellipse cx="55" cy="95" rx="18" ry="22" fill="#0284C7" stroke="#111827" stroke-width="4"/>
+  <circle cx="55" cy="95" r="12" fill="#0F172A"/>
+  <circle cx="48" cy="88" r="5" fill="#FFFFFF"/>
+  <circle cx="58" cy="102" r="2.5" fill="#FFFFFF"/>
+  <!-- Right Eyeball -->
+  <ellipse cx="135" cy="100" rx="35" ry="45" fill="#FFFFFF" stroke="#111827" stroke-width="7"/>
+  <!-- Right Iris & Pupil -->
+  <ellipse cx="125" cy="95" rx="18" ry="22" fill="#0284C7" stroke="#111827" stroke-width="4"/>
+  <circle cx="125" cy="95" r="12" fill="#0F172A"/>
+  <circle cx="118" cy="88" r="5" fill="#FFFFFF"/>
+  <circle cx="128" cy="102" r="2.5" fill="#FFFFFF"/>
+</svg>

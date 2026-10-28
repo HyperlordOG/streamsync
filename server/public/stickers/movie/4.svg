@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="heartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FB7185"/>
+      <stop offset="50%" stop-color="#E11D48"/>
+      <stop offset="100%" stop-color="#9F1239"/>
+    </linearGradient>
+  </defs>
+  <!-- Heart Shape -->
+  <path d="M 100,175 C 20,115 15,45 65,35 C 90,30 100,60 100,60 C 100,60 110,30 135,35 C 185,45 180,115 100,175 Z" fill="url(#heartGrad)" stroke="#111827" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Gloss highlight -->
+  <path d="M 55,50 C 45,65 48,85 58,100" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.8"/>
+  <!-- Sparkles -->
+  <circle cx="165" cy="40" r="4" fill="#FDE047"/>
+  <path d="M 165,30 L 165,50 M 155,40 L 175,40" stroke="#FDE047" stroke-width="3" stroke-linecap="round"/>
+</svg>

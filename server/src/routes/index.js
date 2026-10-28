@@ -14,6 +14,7 @@ import {
   roomSnapshot,
 } from '../core/registry.js';
 import mediaRoutes from './media.js';
+import chatRoutes from './chat.js';
 
 /**
  * @param {import('fastify').FastifyInstance} fastify
@@ -21,6 +22,9 @@ import mediaRoutes from './media.js';
 export async function registerRoutes(fastify) {
   // Register Streamo Streaming & TMDB Media Routes
   await fastify.register(mediaRoutes, { prefix: '/api/media' });
+
+  // Register Rich Chat Routes (Stickers & Tenor GIF Proxies)
+  await fastify.register(chatRoutes, { prefix: '/api/chat' });
 
 
   // ── POST /api/join  (Create Room) ────────────────────────────────────────
@@ -37,7 +41,7 @@ export async function registerRoutes(fastify) {
             type: 'object',
             properties: {
               url:       { type: 'string' },
-              provider:  { type: 'string', enum: ['mp4', 'hls', 'youtube', 'dash', 'netflix', 'prime'] },
+              provider:  { type: 'string', enum: ['mp4', 'hls', 'youtube', 'dash', 'netflix', 'prime', 'streamo'] },
               title:     { type: 'string' },
               thumbnail: { type: 'string' },
             },
@@ -153,5 +157,16 @@ export async function registerRoutes(fastify) {
     status: 'ok',
     server_time: Date.now(),
     uptime: process.uptime(),
+  }));
+
+  // ── GET /api/version ──────────────────────────────────────────────────────
+  fastify.get('/api/version', async () => ({
+    version: '1.3.0',
+  }));
+
+  // ── GET /api/time ─────────────────────────────────────────────────────────
+  fastify.get('/api/time', async () => ({
+    server_time: Date.now(),
+    epoch: Date.now(),
   }));
 }

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="shockBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="60%" stop-color="#FACC15"/>
+    </linearGradient>
+  </defs>
+  <!-- Face -->
+  <ellipse cx="100" cy="105" rx="65" ry="75" fill="url(#shockBg)" stroke="#111827" stroke-width="6"/>
+  <!-- Eyes -->
+  <ellipse cx="75" cy="80" rx="14" ry="18" fill="#FFFFFF" stroke="#111827" stroke-width="5"/>
+  <circle cx="75" cy="80" r="7" fill="#111827"/>
+  <ellipse cx="125" cy="80" rx="14" ry="18" fill="#FFFFFF" stroke="#111827" stroke-width="5"/>
+  <circle cx="125" cy="80" r="7" fill="#111827"/>
+  <!-- Mouth (O-shape) -->
+  <ellipse cx="100" cy="130" rx="18" ry="30" fill="#1E293B" stroke="#111827" stroke-width="6"/>
+  <!-- Hands on Cheeks -->
+  <path d="M 38,130 C 35,95 55,90 60,115 C 62,125 58,150 45,155 Z" fill="#93C5FD" stroke="#111827" stroke-width="5"/>
+  <path d="M 162,130 C 165,95 145,90 140,115 C 138,125 142,150 155,155 Z" fill="#93C5FD" stroke="#111827" stroke-width="5"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="fireOuter" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#EA580C"/>
+      <stop offset="50%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#EF4444"/>
+    </linearGradient>
+    <linearGradient id="fireInner" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#FDE047"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer Flame -->
+  <path d="M 100,15 C 110,50 150,75 150,115 C 150,155 125,185 100,185 C 75,185 50,155 50,115 C 50,85 70,60 85,45 C 80,65 95,85 105,75 C 115,65 110,40 100,15 Z" fill="url(#fireOuter)" stroke="#111827" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Inner Flame -->
+  <path d="M 100,80 C 110,105 130,120 130,140 C 130,165 115,180 100,180 C 85,180 70,165 70,140 C 70,120 85,105 92,95 C 92,108 98,112 102,108 C 105,102 102,90 100,80 Z" fill="url(#fireInner)" stroke="#111827" stroke-width="5" stroke-linejoin="round"/>
+</svg>

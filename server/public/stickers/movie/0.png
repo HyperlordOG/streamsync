@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="pop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="100%" stop-color="#FACC15"/>
+    </linearGradient>
+  </defs>
+  <!-- Bucket -->
+  <polygon points="50,90 60,185 140,185 150,90" fill="#EF4444" stroke="#111827" stroke-width="6" stroke-linejoin="round"/>
+  <!-- Stripes -->
+  <polygon points="72,90 78,185 92,185 88,90" fill="#FFFFFF"/>
+  <polygon points="108,90 104,185 118,185 124,90" fill="#FFFFFF"/>
+  <!-- Popcorn Pieces -->
+  <circle cx="70" cy="80" r="18" fill="url(#pop)" stroke="#111827" stroke-width="5"/>
+  <circle cx="100" cy="72" r="22" fill="url(#pop)" stroke="#111827" stroke-width="5"/>
+  <circle cx="130" cy="80" r="18" fill="url(#pop)" stroke="#111827" stroke-width="5"/>
+  <circle cx="85" cy="55" r="16" fill="url(#pop)" stroke="#111827" stroke-width="5"/>
+  <circle cx="115" cy="55" r="16" fill="url(#pop)" stroke="#111827" stroke-width="5"/>
+  <circle cx="100" cy="40" r="14" fill="#FEF08A" stroke="#111827" stroke-width="5"/>
+  <!-- Butter accents -->
+  <path d="M 80,72 Q 86,65 92,72" fill="none" stroke="#CA8A04" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 110,65 Q 116,58 122,65" fill="none" stroke="#CA8A04" stroke-width="3" stroke-linecap="round"/>
+</svg>

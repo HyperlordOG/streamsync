@@ -20,6 +20,12 @@ import {
  * @param {string} raw - Raw JSON string from client
  */
 export function handleMessage(party_id, conn_id, user, ws, raw) {
+  // 1MB pre-parse message size guard to prevent CPU exhaustion on massive payloads
+  if (raw && raw.length > 1_048_576) {
+    ws.send(JSON.stringify({ type: 'error', error: 'Message too large' }));
+    return;
+  }
+
   let msg;
   try {
     msg = JSON.parse(raw);
@@ -39,7 +45,7 @@ export function handleMessage(party_id, conn_id, user, ws, raw) {
       break;
 
     case 'chat':
-      handleChat(party_id, conn_id, user, msg);
+      handleChat(party_id, conn_id, user, ws, msg);
       break;
 
     case 'typing':
@@ -90,17 +96,35 @@ function handlePartyUpdate(party_id, conn_id, user, ws, msg) {
     room.browsing = !!payload.browsing;
   }
 
-  // Persist sync state changes
-  if (payload.sync) {
-    updateSync(party_id, {
-      started: payload.sync.started ?? room.sync.started,
-      paused:  payload.sync.paused  ?? null,
-    });
-  }
-
-  // Persist video changes (host switching content)
+  // Persist video changes (host switching content) first so room resets if new video
   if (payload.video) {
     updateVideo(party_id, payload.video);
+  }
+
+  // Persist synchronized subtitle and audio tracks
+  if (payload.tracks) {
+    if (!room.tracks) room.tracks = { subtitle: null, audio: null };
+    if (payload.tracks.subtitle !== undefined) {
+      room.tracks.subtitle = payload.tracks.subtitle;
+    }
+    if (payload.tracks.audio !== undefined) {
+      room.tracks.audio = payload.tracks.audio;
+    }
+  }
+
+  // Persist sync state changes
+  if (payload.sync) {
+    const isPaused = payload.sync.status === 'PAUS' || (payload.sync.paused !== null && payload.sync.paused !== undefined);
+    const pos = payload.sync.position !== undefined ? payload.sync.position : (payload.sync.paused !== null && payload.sync.paused !== undefined ? payload.sync.paused : room.sync.position);
+
+    updateSync(party_id, {
+      status:   payload.sync.status ?? (isPaused ? 'PAUS' : 'PLAY'),
+      position: pos,
+      time:     payload.sync.time ?? Date.now(),
+      started:  payload.sync.started !== undefined ? payload.sync.started : (isPaused ? null : room.sync.started),
+      paused:   isPaused ? pos : null,
+      rate:     payload.sync.rate ?? room.sync.rate ?? 1.0,
+    });
   }
 
   if (payload.settings?.shared_controls !== undefined && user.is_owner) {
@@ -117,20 +141,68 @@ function handlePartyUpdate(party_id, conn_id, user, ws, msg) {
 
 /**
  * Chat message event. Fans out to all room peers including sender.
+ * Handles both rich Phase 2 ChatMessage and legacy string formats.
  */
-function handleChat(party_id, conn_id, user, msg) {
-  if (!msg.content || typeof msg.content !== 'string') return;
-  const content = msg.content.slice(0, 500).trim(); // max 500 chars
-  if (!content) return;
+function handleChat(party_id, conn_id, user, ws, msg) {
+  const serialized = JSON.stringify(msg);
+  if (serialized.length > 1_048_576) {
+    ws.send(JSON.stringify({ type: 'error', error: 'Message too large' }));
+    return;
+  }
 
-  broadcast(party_id, {
-    type: 'chat',
-    id: `msg_${Date.now()}_${conn_id.slice(-4)}`,
-    user_id: user.id,
-    display_name: user.display_name,
-    content,
-    created_at: Date.now(),
-  });
+  // Support extended rich ChatMessage schema
+  if (msg.chat && typeof msg.chat === 'object') {
+    const chatPayload = {
+      id: msg.chat.id || `msg_${Date.now()}_${conn_id.slice(-4)}`,
+      user: msg.chat.user || { id: user.id, name: user.display_name },
+      type: msg.chat.type || 'text',
+      text: msg.chat.text,
+      stickerId: msg.chat.stickerId,
+      gifUrl: msg.chat.gifUrl,
+      attachment: msg.chat.attachment,
+      replyTo: msg.chat.replyTo,
+      timestamp: msg.chat.timestamp || Date.now(),
+    };
+
+    console.log({ room: party_id, type: chatPayload.type, user: chatPayload.user?.id || user.id });
+
+    broadcast(party_id, {
+      type: 'chat',
+      chat: chatPayload,
+      // Provide legacy fields for backwards compatibility with any basic observers
+      id: chatPayload.id,
+      user_id: user.id,
+      display_name: user.display_name,
+      content: chatPayload.text || `[${chatPayload.type}]`,
+      created_at: chatPayload.timestamp,
+    });
+    return;
+  }
+
+  // Legacy string format fallback
+  if (msg.content && typeof msg.content === 'string') {
+    const content = msg.content.slice(0, 500).trim();
+    if (!content) return;
+
+    const legacyId = `msg_${Date.now()}_${conn_id.slice(-4)}`;
+    console.log({ room: party_id, type: 'text', user: user.id });
+
+    broadcast(party_id, {
+      type: 'chat',
+      id: legacyId,
+      user_id: user.id,
+      display_name: user.display_name,
+      content,
+      created_at: Date.now(),
+      chat: {
+        id: legacyId,
+        user: { id: user.id, name: user.display_name },
+        type: 'text',
+        text: content,
+        timestamp: Date.now(),
+      },
+    });
+  }
 }
 
 /**

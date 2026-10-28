@@ -1,6 +1,28 @@
 # StreamSync Changelog
 
-## [1.1.0] - 2026-10-27
+## [1.2.0] - 2026-10-27
+
+### Added
+- **Complete TV Series & Seasons Support (`/api/media/tv/:tmdbId`, `/api/media/tv/:tmdbId/season/:seasonNumber`)**:
+  - Live extraction of rich TV series metadata directly from Streamo's App Router RSC payload and JSON-LD schema (seasons count, episode totals, creators, network ratings, high-res posters and backdrops).
+  - Dedicated `/api/media/tv/:tmdbId/season/:seasonNumber` endpoint serving full episode collections with episode stills, air dates, runtimes, and synopses.
+  - Automatic series slug discovery via Streamo search catalog fallback.
+
+- **Streamo Original Series Detail Modal & Season/Episode Browser (`/js/movie-browser.js`)**:
+  - Exact Streamo visual parity: Large cinematic hero backdrop, floating poster card, 'TV SERIES' badge, IMDb/TMDB rating pills, and metadata summary.
+  - Interactive Season Tabs: 'Specials', 'Season 1', 'Season 2', etc. with active indicator pill.
+  - Responsive Episode Grid: Episode cards displaying episode thumbnails, 'E01' / 'E02' badges, episode titles, release dates, runtimes, and play hover overlays.
+  - Direct episode launch: Clicking any episode starts playback for that exact `{ season, episode }` in synchronized watch party mode.
+
+- **In-Player Episode Switcher Drawer (`/js/party-player.js`)**:
+  - In-player 'Episodes' button in control bar when streaming any TV series (`type: 'tv'`).
+  - Slide-in glassmorphic Episode Drawer from the right without leaving fullscreen/theater playback.
+  - Instant Season dropdown switcher and episode cards with active episode indicator.
+  - Switching an episode broadcasts the new episode `{ tmdbId, type: 'tv', season, episode, title }` across WebSocket so all peers in the watch party transition seamlessly.
+
+- **Automated Verification**:
+  - `server/test/tv.test.js`: Verified 5+ seasons and episode collections for *Breaking Bad* (TMDB `1396`).
+  - Full browser subagent validation of series modal, Season 2 switching, Season 1 Episode 2 playback, and in-player episode drawer.
 
 ### Added
 - **Streamo Live Streaming Pipeline (`/api/media/stream/:tmdbId`)**:
