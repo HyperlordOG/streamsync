@@ -808,6 +808,15 @@
       display: none !important;
     }
 
+    /* DRM Embedded Player Fullscreen Mode */
+    #drm-player-container.drm-fullscreen-mode {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 9999999 !important;
+    }
+
     /* In-App Web Viewer Sheet */
     .inapp-websheet-overlay {
       position: fixed;
@@ -1761,9 +1770,9 @@
     <!-- Dedicated In-App Web Viewer Sheet -->
     <div class="inapp-websheet-overlay" id="inapp-websheet-overlay" style="display: none;">
       <div class="inapp-websheet-header">
-        <button class="btn btn-secondary" onclick="closeInAppWebSheet()" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; font-weight: 700;">
+        <button class="btn btn-primary" onclick="dockInAppSheetToTheater()" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-weight: 700; background: #6366f1;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-          Back to Party
+          Dock into Theater & Chat
         </button>
         <div class="inapp-websheet-title" id="inapp-websheet-title">Sign In & Browse</div>
         <div style="display: flex; gap: 6px;">
@@ -1776,7 +1785,9 @@
       </div>
       <div class="inapp-websheet-footer">
         <span style="font-size: 12px; color: var(--text-muted);">🔒 Room Code: <strong id="inapp-room-badge" style="color: #fff;">ACTIVE</strong></span>
-        <button class="btn btn-primary" onclick="closeInAppWebSheet()" style="padding: 8px 16px; font-size: 13px; font-weight: 700;">Return to Party Room</button>
+        <button class="btn btn-primary" onclick="dockInAppSheetToTheater()" style="padding: 8px 16px; font-size: 13px; font-weight: 700;">
+          💬 Watch & Chat in Split View
+        </button>
       </div>
     </div>
 
@@ -1808,6 +1819,25 @@
           </div>
 
           <video id="media-player" playsinline webkit-playsinline preload="auto"></video>
+
+          <!-- DRM Embedded Web Stream Player (Prime Video & Netflix - Rave/Hearo Style) -->
+          <div id="drm-player-container" style="display: none; position: absolute; inset: 0; width: 100%; height: 100%; z-index: 20; background: #000;">
+            <div class="drm-player-toolbar" style="position: absolute; top: 0; left: 0; right: 0; height: 38px; background: rgba(9, 13, 22, 0.9); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; z-index: 30; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="drm-toolbar-badge" class="badge" style="background: rgba(0, 168, 225, 0.2); color: #38bdf8; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px;">PRIME VIDEO</span>
+                <span id="drm-toolbar-title" style="font-size: 12px; color: #fff; font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Playing</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="btn btn-secondary" id="btn-drm-fullscreen-toggle" onclick="toggleDrmFullscreen()" title="Toggle Fullscreen vs Split Chat" style="padding: 4px 10px; font-size: 11px; font-weight: 700;">
+                  ⛶ Fullscreen
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="reloadDrmPlayer()" title="Reload Stream" style="padding: 4px 8px; font-size: 11px;">
+                  ⟳
+                </button>
+              </div>
+            </div>
+            <iframe id="drm-embedded-iframe" style="width: 100%; height: 100%; border: none; padding-top: 38px;" allow="autoplay; encrypted-media; fullscreen" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+          </div>
 
           <!-- Host Browsing Overlay (Guests see when host is selecting a movie) -->
           <div id="host-browsing-overlay" class="host-browsing-overlay" style="display: none;">
@@ -1984,35 +2014,42 @@
 
     // Global Navigation & Android Back Button State Handler
     function handleAppBack() {
-      // 1. If in-app browser sheet is open, close it
-      const webSheet = document.getElementById('inapp-websheet-overlay');
-      if (webSheet && webSheet.style.display !== 'none') {
-        closeInAppWebSheet();
+      // 1. If DRM player is in fullscreen mode, exit to split chat view!
+      const drmContainer = document.getElementById('drm-player-container');
+      if (drmContainer && drmContainer.classList.contains('drm-fullscreen-mode')) {
+        toggleDrmFullscreen();
         return 'HANDLED';
       }
 
-      // 2. If service modal is open, close it
+      // 2. If in-app browser sheet is open, dock it to theater & chat!
+      const webSheet = document.getElementById('inapp-websheet-overlay');
+      if (webSheet && webSheet.style.display !== 'none') {
+        dockInAppSheetToTheater();
+        return 'HANDLED';
+      }
+
+      // 3. If service modal is open, close it
       const svcModal = document.getElementById('service-modal-overlay');
       if (svcModal && svcModal.style.display !== 'none') {
         closeServiceModal();
         return 'HANDLED';
       }
 
-      // 3. If movie drawer is open, close it
+      // 4. If movie drawer is open, close it
       const drawer = document.getElementById('movie-browser-drawer');
       if (drawer && drawer.classList.contains('open')) {
         toggleMovieBrowser(false);
         return 'HANDLED';
       }
 
-      // 4. If in theater view, leave room and return to lobby
+      // 5. If in theater view, leave room and return to lobby
       const theater = document.getElementById('theater-view');
       if (theater && theater.style.display !== 'none') {
         leavePartyToLobby();
         return 'HANDLED';
       }
 
-      // 5. At lobby -> allow default exit
+      // 6. At lobby -> allow default exit
       return 'EXIT';
     }
     window.handleAppBack = handleAppBack;
@@ -2038,6 +2075,15 @@
       }
       currentRoom = null;
       document.querySelector('.video-wrapper')?.classList.remove('drm-active');
+      const drmContainer = document.getElementById('drm-player-container');
+      const drmIframe = document.getElementById('drm-embedded-iframe');
+      if (drmContainer) {
+        drmContainer.classList.remove('drm-fullscreen-mode');
+        drmContainer.style.display = 'none';
+      }
+      if (drmIframe) drmIframe.src = 'about:blank';
+      closeInAppWebSheet();
+
       const theaterView = document.getElementById('theater-view');
       const lobbyView = document.getElementById('lobby-view');
       const backBtn = document.getElementById('btn-theater-back');
@@ -2320,11 +2366,71 @@
       if (sheet) sheet.style.display = 'flex';
     }
 
-    function closeInAppWebSheet() {
+    function dockInAppSheetToTheater() {
+      const sheetIframe = document.getElementById('inapp-websheet-iframe');
+      const currentUrl = sheetIframe?.src || '';
+      const provider = currentRoom?.video?.provider || 'prime';
+      closeInAppWebSheet(false);
+      loadDrmPlayerInTheater(provider, currentUrl);
+    }
+
+    function loadDrmPlayerInTheater(provider, url) {
+      const container = document.getElementById('drm-player-container');
+      const iframe = document.getElementById('drm-embedded-iframe');
+      const badge = document.getElementById('drm-toolbar-badge');
+      const title = document.getElementById('drm-toolbar-title');
+      const drmCard = document.getElementById('drm-theater-card');
+      const playerEl = document.getElementById('media-player');
+      const videoWrapper = document.querySelector('.video-wrapper');
+
+      if (videoWrapper) videoWrapper.classList.add('drm-active');
+      if (playerEl) playerEl.style.display = 'none';
+      if (drmCard) drmCard.style.display = 'none';
+
+      if (badge) {
+        badge.textContent = provider === 'prime' ? 'PRIME VIDEO' : 'NETFLIX';
+        badge.style.background = provider === 'prime' ? 'rgba(0, 168, 225, 0.2)' : 'rgba(229, 9, 20, 0.2)';
+        badge.style.color = provider === 'prime' ? '#38bdf8' : '#ff4d4d';
+      }
+
+      if (title && currentRoom) {
+        title.textContent = currentRoom.video?.title || (provider === 'prime' ? 'Prime Video' : 'Netflix');
+      }
+
+      const streamUrl = url || (provider === 'prime' ? 'https://www.primevideo.com' : 'https://www.netflix.com');
+      if (iframe) {
+        if (!iframe.src || iframe.src === 'about:blank' || iframe.src !== streamUrl) {
+          iframe.src = streamUrl;
+        }
+      }
+
+      if (container) {
+        container.style.display = 'block';
+      }
+
+      // Hide the full-screen sheet so the theater with chat is visible!
+      const sheet = document.getElementById('inapp-websheet-overlay');
+      if (sheet) sheet.style.display = 'none';
+    }
+
+    function toggleDrmFullscreen() {
+      const container = document.getElementById('drm-player-container');
+      const btn = document.getElementById('btn-drm-fullscreen-toggle');
+      if (!container) return;
+      const isFull = container.classList.toggle('drm-fullscreen-mode');
+      if (btn) btn.textContent = isFull ? '🗗 Split / Chat' : '⛶ Fullscreen';
+    }
+
+    function reloadDrmPlayer() {
+      const iframe = document.getElementById('drm-embedded-iframe');
+      if (iframe && iframe.src) iframe.src = iframe.src;
+    }
+
+    function closeInAppWebSheet(clearSrc = true) {
       const sheet = document.getElementById('inapp-websheet-overlay');
       const iframe = document.getElementById('inapp-websheet-iframe');
       if (sheet) sheet.style.display = 'none';
-      if (iframe) iframe.src = 'about:blank';
+      if (clearSrc && iframe) iframe.src = 'about:blank';
     }
 
     function reloadInAppWebSheet() {
@@ -2364,6 +2470,10 @@
     window.openInAppWebSheet = openInAppWebSheet;
     window.closeInAppWebSheet = closeInAppWebSheet;
     window.reloadInAppWebSheet = reloadInAppWebSheet;
+    window.dockInAppSheetToTheater = dockInAppSheetToTheater;
+    window.loadDrmPlayerInTheater = loadDrmPlayerInTheater;
+    window.toggleDrmFullscreen = toggleDrmFullscreen;
+    window.reloadDrmPlayer = reloadDrmPlayer;
 
     // Handle Create Room
     async function handleCreateRoom() {
@@ -2477,15 +2587,27 @@
 
       if (isDrmProvider) {
         playerEl.style.display = 'none';
-        drmCardEl.style.display = 'flex';
         videoWrapper?.classList.add('drm-active');
 
         const providerName = roomData.video.provider === 'prime' ? 'Amazon Prime Video' : 'Netflix';
         document.getElementById('drm-service-badge').textContent = `${providerName.toUpperCase()} WATCH PARTY`;
         document.getElementById('drm-movie-title').textContent = roomData.video.title || `${providerName} Stream`;
+
+        // If video URL exists, load directly into the docked theater player stage right above chat!
+        const targetStreamUrl = roomData.video?.url;
+        if (targetStreamUrl && (targetStreamUrl.includes('primevideo.com') || targetStreamUrl.includes('netflix.com'))) {
+          drmCardEl.style.display = 'none';
+          loadDrmPlayerInTheater(roomData.video.provider, targetStreamUrl);
+        } else {
+          drmCardEl.style.display = 'flex';
+          const drmContainer = document.getElementById('drm-player-container');
+          if (drmContainer) drmContainer.style.display = 'none';
+        }
       } else {
         playerEl.style.display = 'block';
         drmCardEl.style.display = 'none';
+        const drmContainer = document.getElementById('drm-player-container');
+        if (drmContainer) drmContainer.style.display = 'none';
         videoWrapper?.classList.remove('drm-active');
       }
 
