@@ -46,8 +46,8 @@ jobs:
           cd apps/mobile/android
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
-          mkdir -p ../../../build-artifacts
-          cp app/build/outputs/apk/debug/app-debug.apk ../../../build-artifacts/StreamSync.apk
+          mkdir -p $GITHUB_WORKSPACE/build-artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk $GITHUB_WORKSPACE/build-artifacts/StreamSync.apk
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
@@ -85,17 +85,17 @@ jobs:
             -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -archivePath ../../../build/App.xcarchive \
+            -archivePath $GITHUB_WORKSPACE/build/App.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r apps/mobile/build/App.xcarchive/Products/Applications/App.app Payload/
+          cp -r $GITHUB_WORKSPACE/build/App.xcarchive/Products/Applications/*.app Payload/
           zip -r StreamSync.ipa Payload
-          mkdir -p build-artifacts
-          mv StreamSync.ipa build-artifacts/
+          mkdir -p $GITHUB_WORKSPACE/build-artifacts
+          mv StreamSync.ipa $GITHUB_WORKSPACE/build-artifacts/
 
       - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
@@ -107,15 +107,18 @@ jobs:
     name: 🚀 Publish GitHub Release
     needs: [build-android, build-ios]
     runs-on: ubuntu-latest
+    if: always() && (needs.build-android.result == 'success' || needs.build-ios.result == 'success')
     steps:
       - name: Download Android Artifact
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: StreamSync-Android-APK
           path: release-files
 
       - name: Download iOS Artifact
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: StreamSync-iOS-IPA
           path: release-files
@@ -124,9 +127,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.4.1
-          files: |
-            release-files/StreamSync.apk
-            release-files/StreamSync.ipa
+          files: release-files/*
           name: StreamSync v1.4.1 — Native Mobile Release
           body: |
             ## 🎬 StreamSync Native Mobile Release (v1.4.1)
