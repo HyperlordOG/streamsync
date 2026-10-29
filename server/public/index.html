@@ -456,6 +456,62 @@
       margin-bottom: 16px;
     }
 
+    /* Dedicated Service Action Modal */
+    .service-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .service-modal-card {
+      background: #111827;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 24px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(99, 102, 241, 0.25);
+      overflow: hidden;
+      animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .service-modal-header {
+      padding: 20px 24px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .service-modal-body {
+      padding: 24px;
+    }
+    .btn-launch-netflix {
+      background: #e50914 !important;
+      color: #fff !important;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(229, 9, 20, 0.45);
+    }
+    .btn-launch-netflix:hover {
+      background: #b80710 !important;
+    }
+    .btn-launch-prime {
+      background: #00a8e1 !important;
+      color: #fff !important;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(0, 168, 225, 0.45);
+    }
+    .btn-launch-prime:hover {
+      background: #0087b5 !important;
+    }
+
     .btn {
       border: none;
       border-radius: 12px;
@@ -1442,7 +1498,7 @@
           <label class="input-label">Select Watch Party Source</label>
           <div class="service-hub-grid">
             <!-- Free Movies / Series -->
-            <div class="service-card service-movies active" id="svc-movies" onclick="selectService('movies')">
+            <div class="service-card service-movies active" id="svc-movies" onclick="toggleMovieBrowser(true)">
               <div class="service-badge badge-pop">10,000+</div>
               <div class="service-logo-wrap">🎬</div>
               <div class="service-name">Free Movies</div>
@@ -1450,33 +1506,33 @@
             </div>
 
             <!-- Netflix -->
-            <div class="service-card service-netflix" id="svc-netflix" onclick="selectService('netflix')">
+            <div class="service-card service-netflix" id="svc-netflix" onclick="openServiceModal('netflix')">
               <div class="service-badge badge-net">OFFICIAL</div>
               <div class="service-logo-wrap">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="#e50914"><path d="M4 2v20h4V7.5L16 22h4V2h-4v14.5L8 2z"/></svg>
               </div>
               <div class="service-name">Netflix</div>
-              <div class="service-sub">Watch Party</div>
+              <div class="service-sub">Tap to Open</div>
             </div>
 
             <!-- Prime Video -->
-            <div class="service-card service-prime" id="svc-prime" onclick="selectService('prime')">
+            <div class="service-card service-prime" id="svc-prime" onclick="openServiceModal('prime')">
               <div class="service-badge badge-prime">OFFICIAL</div>
               <div class="service-logo-wrap">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="#00a8e1"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
               </div>
               <div class="service-name">Prime Video</div>
-              <div class="service-sub">Watch Party</div>
+              <div class="service-sub">Tap to Open</div>
             </div>
 
             <!-- YouTube -->
-            <div class="service-card service-youtube" id="svc-youtube" onclick="selectService('youtube')">
+            <div class="service-card service-youtube" id="svc-youtube" onclick="openServiceModal('youtube')">
               <div class="service-badge badge-yt">FREE</div>
               <div class="service-logo-wrap">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
               </div>
               <div class="service-name">YouTube</div>
-              <div class="service-sub">Videos & Music</div>
+              <div class="service-sub">Tap to Open</div>
             </div>
           </div>
         </div>
@@ -1613,6 +1669,23 @@
         <div class="code-pill" onclick="copyPath('streamsync/apps/extension')" title="Click to copy unpacked path">
           Folder: <strong>streamsync/apps/extension</strong> 📋
         </div>
+      </div>
+    </div>
+
+    <!-- Service Action Modal (Netflix / Prime / YouTube) -->
+    <div class="service-modal-overlay" id="service-modal-overlay" style="display: none;" onclick="closeServiceModal(event)">
+      <div class="service-modal-card" id="service-modal-card" onclick="event.stopPropagation()">
+        <div class="service-modal-header">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="service-modal-icon" id="modal-svc-icon"></div>
+            <div>
+              <h3 id="modal-svc-title" style="font-size: 18px; font-weight: 800; color: #fff;"></h3>
+              <p id="modal-svc-subtitle" style="font-size: 12px; color: var(--text-muted);"></p>
+            </div>
+          </div>
+          <button class="drawer-close-btn" onclick="closeServiceModal()" title="Close">✕</button>
+        </div>
+        <div class="service-modal-body" id="modal-svc-body"></div>
       </div>
     </div>
 
@@ -1831,6 +1904,8 @@
       });
       if (svc === 'movies') {
         toggleMovieBrowser(true);
+      } else {
+        openServiceModal(svc);
       }
     }
 
@@ -1843,8 +1918,175 @@
       if (icon) icon.textContent = isHidden ? '▲' : '▼';
     }
 
+    function openServiceModal(svc) {
+      const overlay = document.getElementById('service-modal-overlay');
+      const icon = document.getElementById('modal-svc-icon');
+      const title = document.getElementById('modal-svc-title');
+      const subtitle = document.getElementById('modal-svc-subtitle');
+      const body = document.getElementById('modal-svc-body');
+      if (!overlay || !body) return;
+
+      currentService = svc;
+
+      if (svc === 'netflix') {
+        icon.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="#e50914"><path d="M4 2v20h4V7.5L16 22h4V2h-4v14.5L8 2z"/></svg>`;
+        title.textContent = 'Netflix Watch Party';
+        subtitle.textContent = 'Official Netflix sync with personal account';
+        body.innerHTML = `
+          <div style="margin-bottom: 16px;">
+            <label class="input-label">1. Sign In & Pick Movie / Show</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+              <a href="https://www.netflix.com" target="_blank" rel="noopener noreferrer" class="btn btn-launch-netflix" style="flex: 1; min-width: 160px; text-align: center; text-decoration: none; padding: 12px 16px; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;" onclick="handleServiceAppLaunch('netflix')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M4 2v20h4V7.5L16 22h4V2h-4v14.5L8 2z"/></svg>
+                Open Netflix (App / Web)
+              </a>
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 16px;">
+              Opens Netflix directly. Log in with your profile, pick what you want to watch, and paste the title or URL below to sync!
+            </p>
+
+            <label class="input-label" for="modal-netflix-input">2. Movie Title or Netflix Watch URL</label>
+            <input type="text" class="input-field" id="modal-netflix-input" placeholder="e.g. Stranger Things or https://www.netflix.com/watch/..." style="margin-bottom: 14px;" />
+
+            <button type="button" class="btn btn-primary" style="width: 100%; padding: 14px; font-weight: 700; font-size: 14px;" onclick="startServiceWatchParty('netflix')">
+              🎬 Create Synced Netflix Room
+            </button>
+          </div>
+        `;
+      } else if (svc === 'prime') {
+        icon.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="#00a8e1"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>`;
+        title.textContent = 'Prime Video Watch Party';
+        subtitle.textContent = 'Official Prime Video sync with personal account';
+        body.innerHTML = `
+          <div style="margin-bottom: 16px;">
+            <label class="input-label">1. Sign In & Pick Movie / Show</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+              <a href="https://www.primevideo.com" target="_blank" rel="noopener noreferrer" class="btn btn-launch-prime" style="flex: 1; min-width: 160px; text-align: center; text-decoration: none; padding: 12px 16px; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;" onclick="handleServiceAppLaunch('prime')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+                Open Prime Video (App / Web)
+              </a>
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 16px;">
+              Opens Prime Video directly. Log in with your profile, pick what you want to watch, and paste the title or URL below to sync!
+            </p>
+
+            <label class="input-label" for="modal-prime-input">2. Movie Title or Prime Video URL</label>
+            <input type="text" class="input-field" id="modal-prime-input" placeholder="e.g. The Boys, Fallout, or https://www.primevideo.com/detail/..." style="margin-bottom: 14px;" />
+
+            <button type="button" class="btn btn-primary" style="width: 100%; padding: 14px; font-weight: 700; font-size: 14px;" onclick="startServiceWatchParty('prime')">
+              🎬 Create Synced Prime Video Room
+            </button>
+          </div>
+        `;
+      } else if (svc === 'youtube') {
+        icon.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`;
+        title.textContent = 'YouTube Watch Party';
+        subtitle.textContent = 'Watch music, trailers, and YouTube together';
+        body.innerHTML = `
+          <div style="margin-bottom: 16px;">
+            <label class="input-label">Quick Stream Presets</label>
+            <div class="presets-row" style="grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px;">
+              <button type="button" class="preset-btn" onclick="setModalYouTube('Lofi Chill Beats', 'https://www.youtube.com/watch?v=jfKfPfyJRdk')">🎧 Lofi Chill Beats</button>
+              <button type="button" class="preset-btn" onclick="setModalYouTube('Big Buck Bunny HD', 'https://www.youtube.com/watch?v=aqz-KE-bpKQ')">🐰 Big Buck Bunny</button>
+              <button type="button" class="preset-btn" onclick="setModalYouTube('Nature 4K Relaxation', 'https://www.youtube.com/watch?v=linlz7-Pnvw')">🌿 Nature 4K Relaxation</button>
+              <button type="button" class="preset-btn" onclick="setModalYouTube('Deadpool 3 Trailer', 'https://www.youtube.com/watch?v=73_1biulkYk')">🔥 Deadpool Trailer</button>
+            </div>
+
+            <label class="input-label" for="modal-youtube-input">Or Paste Any YouTube URL</label>
+            <input type="text" class="input-field" id="modal-youtube-input" placeholder="https://www.youtube.com/watch?v=..." style="margin-bottom: 14px;" />
+
+            <button type="button" class="btn btn-primary" style="width: 100%; padding: 14px; font-weight: 700; font-size: 14px;" onclick="startServiceWatchParty('youtube')">
+              🎬 Launch Synced YouTube Party
+            </button>
+          </div>
+        `;
+      }
+
+      overlay.style.display = 'flex';
+    }
+
+    function closeServiceModal(event) {
+      if (event && event.target && event.target.id !== 'service-modal-overlay' && !event.target.classList.contains('drawer-close-btn')) {
+        return;
+      }
+      const overlay = document.getElementById('service-modal-overlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
+    function handleServiceAppLaunch(service) {
+      if (window.Capacitor?.Plugins?.InAppBrowser) {
+        const targetUrl = (service === 'netflix') ? 'https://www.netflix.com' : 'https://www.primevideo.com';
+        window.Capacitor.Plugins.InAppBrowser.open({ url: targetUrl });
+        return;
+      }
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+      if (isIOS || isAndroid) {
+        const scheme = (service === 'netflix') ? 'nflx://www.netflix.com' : 'primevideo://';
+        setTimeout(() => {
+          window.location.href = scheme;
+        }, 100);
+      }
+    }
+
+    async function startServiceWatchParty(service) {
+      currentService = service;
+      let url = '';
+      let title = '';
+      let provider = service;
+
+      if (service === 'netflix') {
+        const inp = document.getElementById('modal-netflix-input')?.value?.trim();
+        url = inp || 'https://www.netflix.com';
+        title = inp ? ('Netflix: ' + inp) : 'Netflix Watch Party';
+      } else if (service === 'prime') {
+        const inp = document.getElementById('modal-prime-input')?.value?.trim();
+        url = inp || 'https://www.primevideo.com';
+        title = inp ? ('Prime: ' + inp) : 'Prime Video Watch Party';
+      } else if (service === 'youtube') {
+        const inp = document.getElementById('modal-youtube-input')?.value?.trim();
+        url = inp || 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+        title = inp ? ('YouTube: ' + inp) : 'YouTube Watch Party';
+      }
+
+      closeServiceModal();
+
+      const name = document.getElementById('host-name')?.value?.trim() || 'Host';
+      localUser.name = name;
+      localUser.isOwner = true;
+
+      try {
+        const res = await fetch('/api/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: localUser.id,
+            display_name: name,
+            shared_controls: true,
+            video: {
+              url,
+              provider,
+              title,
+            }
+          })
+        });
+
+        const data = await res.json();
+        if (!data.party_id) throw new Error('Failed creating room');
+
+        enterTheater(data, url);
+      } catch (err) {
+        alert('Error creating room: ' + err.message);
+      }
+    }
+
+    function setModalYouTube(title, url) {
+      const inp = document.getElementById('modal-youtube-input');
+      if (inp) inp.value = url;
+    }
+
     function openNetflixInApp() {
-      const netflixUrl = document.getElementById('netflix-watch-url').value.trim() || 'https://www.netflix.com';
+      const netflixUrl = document.getElementById('netflix-watch-url')?.value?.trim() || 'https://www.netflix.com';
       if (window.Capacitor?.Plugins?.InAppBrowser) {
         window.Capacitor.Plugins.InAppBrowser.open({ url: netflixUrl });
       } else {
@@ -1853,7 +2095,7 @@
     }
 
     function openPrimeInApp() {
-      const primeUrl = document.getElementById('prime-watch-url').value.trim() || 'https://www.primevideo.com';
+      const primeUrl = document.getElementById('prime-watch-url')?.value?.trim() || 'https://www.primevideo.com';
       if (window.Capacitor?.Plugins?.InAppBrowser) {
         window.Capacitor.Plugins.InAppBrowser.open({ url: primeUrl });
       } else {
@@ -1865,6 +2107,18 @@
       copyPath('streamsync/apps/extension');
       alert('Desktop Extension path copied! Load unpacked into chrome://extensions to sync Netflix/Prime in browser tabs.');
     }
+
+    // Attach all interactive handlers directly to window for global inline accessibility
+    window.selectService = selectService;
+    window.toggleCustomStreamInput = toggleCustomStreamInput;
+    window.openServiceModal = openServiceModal;
+    window.closeServiceModal = closeServiceModal;
+    window.handleServiceAppLaunch = handleServiceAppLaunch;
+    window.startServiceWatchParty = startServiceWatchParty;
+    window.setModalYouTube = setModalYouTube;
+    window.openNetflixInApp = openNetflixInApp;
+    window.openPrimeInApp = openPrimeInApp;
+    window.copyExtensionHelp = copyExtensionHelp;
 
     // Handle Create Room
     async function handleCreateRoom() {
