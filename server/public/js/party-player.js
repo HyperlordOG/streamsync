@@ -15,12 +15,19 @@
  * - Hls.js master manifest resolution & dual-threshold drift correction
  */
 
-export function getDriftAction(currentMs, targetMs, isPaused = false) {
+export function getDriftAction(currentMs, targetMs, isPaused = false, isIOSNativeHLS = false) {
   // Round both currentMs and targetMs to nearest 100ms to eliminate sub-100ms jitter
   const roundedCurrent = Math.round(currentMs / 100) * 100;
   const roundedTarget = Math.round(targetMs / 100) * 100;
   const deltaMs = roundedTarget - roundedCurrent;
   const absDeltaMs = Math.abs(deltaMs);
+
+  if (isIOSNativeHLS) {
+    if (absDeltaMs > 800) {
+      return { type: 'seek', targetMs, targetSec: targetMs / 1000, deltaMs, zone: 'ZONE 3 [Hard Seek (iOS)]' };
+    }
+    return { type: 'rate', rate: 1.0, deltaMs, zone: 'ZONE 0 [In Sync (iOS)]' };
+  }
 
   if (absDeltaMs > 500) {
     return { type: 'seek', targetMs, targetSec: targetMs / 1000, deltaMs, zone: 'ZONE 3 [Hard Seek]' };
@@ -125,6 +132,13 @@ export class PartyPlayer {
     this.isHlsManifestLoaded = false;
 
     this.isDebugMode = typeof window !== 'undefined' && window.location && new URLSearchParams(window.location.search).get('debug') === '1';
+    this.videoElement = this.video;
+    this._isIOSNativeHLS = false;
+    this._lastNTPCalibration = 0;
+    this._lastRTT = 0;
+    this._diagHUD = null;
+    this._diagBottomCard = null;
+    this.isDiagMode = typeof window !== 'undefined' && window.location && new URLSearchParams(window.location.search).get('diag') === '1';
 
     // Timeline sync state
     this.syncState = {
@@ -191,6 +205,12 @@ export class PartyPlayer {
 
     // Start drift loop immediately (decoupled from canplay / late joiners)
     this.startDriftLoop();
+
+    // Diag HUD and NTP recalibration listeners
+    if (this.isDiagMode) {
+      this._buildDiagHUD();
+    }
+    this._setupVisibilityAndFocusHandlers();
 
     // Auto-unmute and full volume on user first click anywhere on video
     this.video.addEventListener('click', () => {
@@ -3580,6 +3600,7 @@ export class PartyPlayer {
 
     const isAppleNative = this.video?.canPlayType && this.video.canPlayType('application/vnd.apple.mpegurl') !== '';
     const isHls = url.includes('.m3u8') || url.includes('/hls') || url.includes('type=hls') || url.includes('/proxy');
+    this._isIOSNativeHLS = Boolean(isAppleNative && isHls);
 
     const isNodeEnv = typeof window === 'undefined' || typeof document === 'undefined';
     if (isHls && !isAppleNative && !isNodeEnv) {
@@ -3850,6 +3871,10 @@ export class PartyPlayer {
         this.correctDrift();
       }
 
+      if (this.isDiagMode) {
+        this._updateDiagHUD();
+      }
+
       this.driftRafId = requestAnimationFrame(driftLoop);
       if (typeof window !== 'undefined') {
         window._driftLoopRAF = this.driftRafId;
@@ -3880,6 +3905,11 @@ export class PartyPlayer {
       return;
     }
 
+    if (!this.video || !this.video.readyState || this.video.readyState < 2) {
+      this._updateDebugHud(this.lastDriftMs || 0, 'WAITING_FOR_BUFFER', this.video?.playbackRate || 1.0);
+      return;
+    }
+
     if (this.isRemoteSync.current) return;
     if (!this.syncState) return;
 
@@ -3897,41 +3927,72 @@ export class PartyPlayer {
 
     const currentMs = Math.round(this.video.currentTime * 1000);
     const driftMs = targetMs - currentMs;
+    const absDrift = Math.abs(driftMs);
     this.lastDriftMs = driftMs;
 
-    // Check buffer readiness (only pause if media has not loaded current frame)
-    if (!this.video.readyState || this.video.readyState < 2) {
-      this._updateDebugHud(driftMs, 'WAITING_FOR_BUFFER', this.video.playbackRate);
-      this._handleSyncRecoveryBanner(driftMs);
-      return;
-    }
+    const safeTarget = Math.max(0, dur ? Math.min(targetMs / 1000, Math.max(0, dur - 0.5)) : targetMs / 1000);
 
-    // 5 Discrete Zones:
-    // HARD SEEK: |drift| > 500ms (Immediately snaps to target position)
-    if (Math.abs(driftMs) > 500) {
-      this._updateDebugHud(driftMs, 'SEEKING', this.video.playbackRate);
-      this.seekInProgress = true;
-      this.isRemoteSync.current = true;
-      this.ignoreEventsUntil = Date.now() + 1500;
-      const safeTarget = Math.max(0, dur ? Math.min(targetMs / 1000, Math.max(0, dur - 0.5)) : targetMs / 1000);
-      this.video.currentTime = safeTarget;
-      if (this.video.playbackRate !== 1.0) {
-        this.video.playbackRate = 1.0;
-      }
-    } else if (Math.abs(driftMs) > 150) {
-      // SLEWING: 150ms < |drift| <= 500ms (Dynamic slew rate at +8% / -8% for rapid convergence)
-      const rate = driftMs > 0 ? 1.08 : 0.92;
-      this._updateDebugHud(driftMs, 'SLEWING', rate);
-      if (!isPaused) {
-        this.video.playbackRate = rate;
+    if (this._isIOSNativeHLS) {
+      // iOS native HLS: playbackRate is ignored by AVPlayer — use SEEK-ONLY strategy
+      // Lower seek threshold to 800ms because seeking on iOS triggers 1-2s buffering penalty
+      if (absDrift > 800) {
+        this._updateDebugHud(driftMs, 'SEEKING', 1.0);
+        this.seekInProgress = true;
+        this.isRemoteSync.current = true;
+        this.ignoreEventsUntil = Date.now() + 1500;
+        this.video.currentTime = safeTarget;
+        if (this.video.playbackRate !== 1.0) {
+          this.video.playbackRate = 1.0;
+        }
+        setTimeout(() => {
+          this.isRemoteSync.current = false;
+        }, 400);
       } else {
-        this.video.playbackRate = 1.0;
+        // Under 800ms: accept the drift — iOS seeking costs more than the drift itself
+        this._updateDebugHud(driftMs, 'DEADBAND', 1.0);
+        if (this.video.playbackRate !== 1.0) {
+          this.video.playbackRate = 1.0;
+        }
       }
     } else {
-      // DEADBAND: |drift| <= 150ms (Locked in sync)
-      this._updateDebugHud(driftMs, 'DEADBAND', 1.0);
-      if (this.video.playbackRate !== 1.0) {
-        this.video.playbackRate = 1.0;
+      // Android + Desktop: full 3-zone correction with playbackRate slewing
+      if (absDrift > 500) {
+        // Zone 3: Hard seek
+        this._updateDebugHud(driftMs, 'SEEKING', this.video.playbackRate);
+        this.seekInProgress = true;
+        this.isRemoteSync.current = true;
+        this.ignoreEventsUntil = Date.now() + 1500;
+        this.video.currentTime = safeTarget;
+        if (this.video.playbackRate !== 1.0) {
+          this.video.playbackRate = 1.0;
+        }
+        setTimeout(() => {
+          this.isRemoteSync.current = false;
+        }, 400);
+      } else if (absDrift > 150) {
+        // Zone 2: Slew — works on HLS.js and desktop video element
+        const targetRate = driftMs > 0 ? 1.08 : 0.92;
+        this._updateDebugHud(driftMs, 'SLEWING', targetRate);
+        if (!isPaused) {
+          this.video.playbackRate = targetRate;
+          if ('preservesPitch' in this.video) {
+            this.video.preservesPitch = true;
+          }
+          // Fix 2: Check if browser silently rejected the rate change
+          const actualRate = this.video.playbackRate;
+          if (Math.abs(actualRate - targetRate) > 0.01) {
+            console.warn('[Sync] playbackRate change rejected by browser, switching to seek-only mode');
+            this._isIOSNativeHLS = true; // force seek-only from now on
+          }
+        } else {
+          this.video.playbackRate = 1.0;
+        }
+      } else {
+        // Zone 1: Deadband
+        this._updateDebugHud(driftMs, 'DEADBAND', 1.0);
+        if (this.video.playbackRate !== 1.0) {
+          this.video.playbackRate = 1.0;
+        }
       }
     }
 
@@ -4102,12 +4163,21 @@ export class PartyPlayer {
       this._updateDebugHud(this.lastDriftMs || 0, 'WAITING_FOR_SEEK', this.video.playbackRate);
     });
 
-    // onSeeked
+    // onSeeked (Fix 4: wait for readyState >= 3 on iOS / mobile before clearing guard)
     this.video.addEventListener('seeked', () => {
-      this.seekInProgress = false;
-      setTimeout(() => {
-        this.correctDrift();
-      }, 100);
+      if (this.video.readyState >= 3) {
+        this.seekInProgress = false;
+        setTimeout(() => this.correctDrift(), 200);
+      } else {
+        const onCanPlay = () => {
+          this.seekInProgress = false;
+          if (typeof this.video.removeEventListener === 'function') {
+            this.video.removeEventListener('canplay', onCanPlay);
+          }
+          setTimeout(() => this.correctDrift(), 200);
+        };
+        this.video.addEventListener('canplay', onCanPlay, { once: true });
+      }
       if (this.isRemoteSync.current || Date.now() < this.ignoreEventsUntil) return;
       const ntpNow = this.getNtpNow();
       const currentMs = Math.round(this.video.currentTime * 1000);
@@ -4160,8 +4230,237 @@ export class PartyPlayer {
     });
   }
 
+
+  computeDesiredPosition(ntpTime) {
+    if (!this.syncState) return 0;
+    const isPaused = this.syncState.status === 'PAUS' || (this.syncState.paused !== null && this.syncState.paused !== undefined);
+    if (isPaused) {
+      return this.syncState.paused ?? this.syncState.position ?? 0;
+    }
+    const ntpNow = ntpTime !== undefined ? ntpTime : this.getNtpNow();
+    if (!this.syncState.started) {
+      return this.syncState.paused ?? this.syncState.position ?? 0;
+    }
+    const elapsed = Math.max(0, ntpNow - this.syncState.started);
+    return Math.round(elapsed * (this.syncState.rate ?? 1.0));
+  }
+
+  _setupVisibilityAndFocusHandlers() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    // Existing visibilitychange — keep it
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this._recalibrateNTP();
+      }
+    });
+
+    // iOS-specific fallback — fires when user returns to this tab from bfcache
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        this._recalibrateNTP();
+      }
+    });
+
+    // Also recalibrate on focus — catches iOS tab-switch cases
+    window.addEventListener('focus', () => {
+      const now = Date.now();
+      if (now - (this._lastNTPCalibration || 0) > 30000) {
+        this._recalibrateNTP();
+      }
+    });
+  }
+
+  async _recalibrateNTP() {
+    this._lastNTPCalibration = Date.now();
+    try {
+      const samples = [];
+      for (let i = 0; i < 5; i++) {
+        const t1 = Date.now();
+        const res = await fetch('/api/time').then(r => r.json());
+        const t2 = Date.now();
+        const rtt = t2 - t1;
+        const offset = res.server_t - (t1 + rtt / 2);
+        samples.push({ rtt, offset });
+        if (i < 4) await new Promise(r => setTimeout(r, 200));
+      }
+
+      samples.sort((a, b) => a.rtt - b.rtt);
+      const trimmed = samples.slice(1, 4);
+      const avgOffset = trimmed.reduce((sum, s) => sum + s.offset, 0) / trimmed.length;
+      const avgRtt = trimmed.reduce((sum, s) => sum + s.rtt, 0) / trimmed.length;
+      
+      this._lastRTT = Math.round(avgRtt);
+      if (typeof window !== 'undefined') {
+        window._ntpOffset = avgOffset;
+        window.clockOffset = avgOffset;
+      }
+      console.log(`[NTP] Recalibrated: offset=${Math.round(avgOffset)}ms, RTT=${this._lastRTT}ms`);
+
+      setTimeout(() => this.correctDrift(), 100);
+      return avgOffset;
+    } catch (err) {
+      console.warn('[NTP] Recalibration failed:', err);
+    }
+  }
+
+  _buildDiagHUD() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('sync-diag-hud')) {
+      this._diagHUD = document.getElementById('sync-diag-hud');
+    } else {
+      const hud = document.createElement('div');
+      hud.id = 'sync-diag-hud';
+      hud.style.cssText = `
+        position: fixed;
+        top: env(safe-area-inset-top, 0px);
+        left: 0;
+        right: 0;
+        background: rgba(0,0,0,0.88);
+        color: #00ff88;
+        font-family: monospace;
+        font-size: 11px;
+        padding: 6px 12px;
+        z-index: 99999;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2px 8px;
+        pointer-events: none;
+        border-bottom: 1px solid #00ff88;
+        box-shadow: 0 2px 10px rgba(0,255,136,0.2);
+      `;
+      document.body.appendChild(hud);
+      this._diagHUD = hud;
+    }
+    hud.id = 'sync-diag-hud';
+    hud.style.cssText = `
+      position: fixed;
+      top: env(safe-area-inset-top, 0px);
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,0.88);
+      color: #00ff88;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 6px 12px;
+      z-index: 99999;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px 8px;
+      pointer-events: none;
+      border-bottom: 1px solid #00ff88;
+      box-shadow: 0 2px 10px rgba(0,255,136,0.2);
+    `;
+    document.body.appendChild(hud);
+    this._diagHUD = hud;
+
+    // Room Sync Comparison View & FORCE RESYNC button
+    if (document.getElementById('sync-diag-bottom')) {
+      this._diagBottomCard = document.getElementById('sync-diag-bottom');
+    } else {
+      const bottomCard = document.createElement('div');
+      bottomCard.id = 'sync-diag-bottom';
+      bottomCard.style.cssText = `
+        position: fixed;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 75px);
+        left: 12px;
+        right: 12px;
+        background: rgba(10, 15, 29, 0.94);
+        border: 1px solid #00ff88;
+        border-radius: 10px;
+        padding: 10px 14px;
+        z-index: 99998;
+        color: #e2e8f0;
+        font-family: monospace;
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        box-shadow: 0 4px 20px rgba(0, 255, 136, 0.25);
+      `;
+
+      bottomCard.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:bold; color:#00ff88;">ROOM SYNC COMPARISON</span>
+          <button id="diag-btn-resync" style="background:#00ff88; color:#000; border:none; padding:5px 12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px; pointer-events:auto;">FORCE RESYNC</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:11px;">
+          <div>Local Pos: <span id="diag-bottom-local" style="color:#38bdf8;">0.00s</span></div>
+          <div>Server Target: <span id="diag-bottom-target" style="color:#a78bfa;">0.00s</span></div>
+          <div>Live Drift: <span id="diag-bottom-drift" style="color:#00ff88; font-weight:bold;">0ms</span></div>
+          <div>Engine Mode: <span id="diag-bottom-mode" style="color:#f59e0b;">NORMAL</span></div>
+        </div>
+      `;
+
+      document.body.appendChild(bottomCard);
+      const btn = bottomCard.querySelector('#diag-btn-resync');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.forceResync();
+        });
+      }
+      this._diagBottomCard = bottomCard;
+    }
+  }
+
+  _updateDiagHUD() {
+    if (!this._diagHUD) return;
+    const ntpNow = this.getNtpNow();
+    const desired = this.computeDesiredPosition(ntpNow);
+    const current = ((this.video?.currentTime || 0) * 1000);
+    const drift = desired - current;
+    const zone = Math.abs(drift) > 800 ? (this._isIOSNativeHLS ? 'SEEK(iOS)' : 'SEEK') 
+                : Math.abs(drift) > 150 ? 'SLEW' 
+                : 'LOCK';
+    const zoneColor = zone.includes('SEEK') ? '#ff4444' : zone === 'SLEW' ? '#ffaa00' : '#00ff88';
+
+    const pathParts = typeof window !== 'undefined' && window.location ? window.location.pathname.split('/') : [];
+    const roomId = window._roomId || (pathParts[1] === 'room' ? pathParts[2] : null) || '?';
+    const peerCount = window._peerCount || (typeof document !== 'undefined' ? document.querySelectorAll('.theater-peer-badge, .peer-avatar').length : 1) || 1;
+
+    this._diagHUD.innerHTML = `
+      <span>Drift: <b style="color:${zoneColor}">${Math.round(drift)}ms</b></span>
+      <span>Zone: <b style="color:${zoneColor}">${zone}</b></span>
+      <span>NTP offset: ${Math.round(window._ntpOffset || 0)}ms</span>
+      <span>Rate: ${this.video?.playbackRate?.toFixed(2) || '1.00'}x</span>
+      <span>Current: ${(current / 1000).toFixed(2)}s</span>
+      <span>Desired: ${(desired / 1000).toFixed(2)}s</span>
+      <span>RTT: ${this._lastRTT || '?'}ms</span>
+      <span>iOS HLS: ${this._isIOSNativeHLS ? 'YES' : 'NO'}</span>
+      <span>readyState: ${this.video?.readyState || 0}</span>
+      <span>seekInProg: ${this.seekInProgress ? 'YES' : 'NO'}</span>
+      <span>Room: ${roomId}</span>
+      <span>Peers: ${peerCount}</span>
+    `;
+
+    if (this._diagBottomCard) {
+      const localEl = document.getElementById('diag-bottom-local');
+      const targetEl = document.getElementById('diag-bottom-target');
+      const driftEl = document.getElementById('diag-bottom-drift');
+      const modeEl = document.getElementById('diag-bottom-mode');
+      if (localEl) localEl.textContent = `${(current / 1000).toFixed(2)}s`;
+      if (targetEl) targetEl.textContent = `${(desired / 1000).toFixed(2)}s`;
+      if (driftEl) {
+        driftEl.textContent = `${Math.round(drift)}ms`;
+        driftEl.style.color = zoneColor;
+      }
+      if (modeEl) {
+        modeEl.textContent = this._isIOSNativeHLS ? 'SEEK-ONLY (iOS)' : '3-ZONE SLEWING';
+      }
+    }
+  }
+
   destroy() {
     this.stopDriftLoop();
+    if (this._diagHUD) {
+      this._diagHUD.remove();
+      this._diagHUD = null;
+    }
+    if (this._diagBottomCard) {
+      this._diagBottomCard.remove();
+      this._diagBottomCard = null;
+    }
     if (this.hls) {
       this.hls.destroy();
       this.hls = null;
@@ -4179,3 +4478,57 @@ export class PartyPlayer {
 }
 
 export default PartyPlayer;
+
+// Auto-mount diagnostic overlay on page load if ?diag=1
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const mountGlobalDiag = () => {
+    const isDiag = (window.location && new URLSearchParams(window.location.search).get('diag') === '1') || 
+                   (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('streamsync:diag') === '1');
+    if (!isDiag) return;
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('streamsync:diag', '1');
+
+    if (!document.getElementById('sync-diag-hud')) {
+      const hud = document.createElement('div');
+      hud.id = 'sync-diag-hud';
+      hud.style.cssText = `
+        position: fixed;
+        top: env(safe-area-inset-top, 0px);
+        left: 0;
+        right: 0;
+        background: rgba(0,0,0,0.88);
+        color: #00ff88;
+        font-family: monospace;
+        font-size: 11px;
+        padding: 6px 12px;
+        z-index: 99999;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2px 8px;
+        pointer-events: none;
+        border-bottom: 1px solid #00ff88;
+        box-shadow: 0 2px 10px rgba(0,255,136,0.2);
+      `;
+      hud.innerHTML = `
+        <span>Drift: <b style="color:#00ff88">0ms</b></span>
+        <span>Zone: <b style="color:#00ff88">LOCK</b></span>
+        <span>NTP offset: ${Math.round(window._ntpOffset || 0)}ms</span>
+        <span>Rate: 1.00x</span>
+        <span>Current: 0.00s</span>
+        <span>Desired: 0.00s</span>
+        <span>RTT: ?ms</span>
+        <span>iOS HLS: NO</span>
+        <span>readyState: 0</span>
+        <span>seekInProg: NO</span>
+        <span>Room: ?</span>
+        <span>Peers: 1</span>
+      `;
+      document.body.appendChild(hud);
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountGlobalDiag);
+  } else {
+    mountGlobalDiag();
+  }
+}

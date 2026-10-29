@@ -3,7 +3,9 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const playerCodePath = path.resolve('public/js/party-player.js');
+const playerCodePath = fs.existsSync(path.resolve('public/js/party-player.js'))
+  ? path.resolve('public/js/party-player.js')
+  : path.resolve(import.meta.dirname, '../public/js/party-player.js');
 
 test('StreamSync Player Lock Screen Feature Suite', async (t) => {
   const code = fs.readFileSync(playerCodePath, 'utf8');

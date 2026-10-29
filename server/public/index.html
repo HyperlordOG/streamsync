@@ -2129,17 +2129,38 @@
     }
     window.calibrateNTP = calibrateNTP;
 
-    // Failure 1 fix: Recalibrate NTP immediately when tab visibility restores
+    // Failure 1 & Prompt 1 fix: Multi-trigger NTP recalibration (visibilitychange, pageshow, focus)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         console.log('[NTP] Recalibrating after visibility restore');
-        calibrateNTP().then((offset) => {
-          window._ntpOffset = offset;
-          clockOffset = offset;
-          if (partyPlayer && typeof partyPlayer.correctDrift === 'function') {
-            partyPlayer.correctDrift();
-          }
-        });
+        if (partyPlayer && typeof partyPlayer._recalibrateNTP === 'function') {
+          partyPlayer._recalibrateNTP();
+        } else {
+          calibrateNTP().then((offset) => {
+            window._ntpOffset = offset;
+            clockOffset = offset;
+            if (partyPlayer && typeof partyPlayer.correctDrift === 'function') {
+              partyPlayer.correctDrift();
+            }
+          });
+        }
+      }
+    });
+
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted && partyPlayer && typeof partyPlayer._recalibrateNTP === 'function') {
+        console.log('[NTP] Recalibrating after pageshow (bfcache restore)');
+        partyPlayer._recalibrateNTP();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      if (partyPlayer && typeof partyPlayer._recalibrateNTP === 'function') {
+        const now = Date.now();
+        if (now - (partyPlayer._lastNTPCalibration || 0) > 30000) {
+          console.log('[NTP] Recalibrating after focus (tab switch)');
+          partyPlayer._recalibrateNTP();
+        }
       }
     });
 
