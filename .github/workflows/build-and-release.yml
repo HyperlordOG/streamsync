@@ -2,11 +2,11 @@ name: Build & Release StreamSync Native Apps (Android APK & iOS IPA)
 
 on:
   push:
-    tags:
-      - 'v*'
     branches:
       - main
       - master
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -28,26 +28,22 @@ jobs:
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Install Dependencies
         run: |
-          cd streamsync/apps/mobile
+          cd apps/mobile
           npm install
 
-      - name: Capacitor Add & Sync Android
+      - name: Capacitor Sync Android
         run: |
-          cd streamsync/apps/mobile
-          npx cap add android || true
+          cd apps/mobile
           npx cap sync android
 
       - name: Build Android APK
         run: |
-          cd streamsync/apps/mobile/android
+          cd apps/mobile/android
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
           mkdir -p ../../../build-artifacts
@@ -73,18 +69,17 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          cd streamsync/apps/mobile
+          cd apps/mobile
           npm install
 
-      - name: Capacitor Add & Sync iOS
+      - name: Capacitor Sync iOS
         run: |
-          cd streamsync/apps/mobile
-          npx cap add ios || true
+          cd apps/mobile
           npx cap sync ios
 
       - name: Build iOS Archive (Unsigned for AltStore/SideStore)
         run: |
-          cd streamsync/apps/mobile/ios/App
+          cd apps/mobile/ios/App
           pod install
           xcodebuild archive \
             -workspace App.xcworkspace \
@@ -97,7 +92,7 @@ jobs:
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r streamsync/apps/mobile/build/App.xcarchive/Products/Applications/App.app Payload/
+          cp -r apps/mobile/build/App.xcarchive/Products/Applications/App.app Payload/
           zip -r StreamSync.ipa Payload
           mkdir -p build-artifacts
           mv StreamSync.ipa build-artifacts/
@@ -109,7 +104,7 @@ jobs:
           path: build-artifacts/StreamSync.ipa
 
   publish-release:
-    name: 🚀 Publish GitHub Release & Deploy to VPS
+    name: 🚀 Publish GitHub Release
     needs: [build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
@@ -127,21 +122,21 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
+          tag_name: v1.4.1
           files: |
             release-files/StreamSync.apk
             release-files/StreamSync.ipa
-          name: StreamSync ${{ github.ref_name }} — Native Mobile Release
+          name: StreamSync v1.4.1 — Native Mobile Release
           body: |
-            ## 🎬 StreamSync Native Mobile Release (${{ github.ref_name }})
+            ## 🎬 StreamSync Native Mobile Release (v1.4.1)
             
             ### 📱 Download Links:
             - **Android APK:** Direct install on Samsung, Pixel, Xiaomi, OnePlus.
             - **iOS IPA:** For AltStore, SideStore, TrollStore, Scarlet, or Sideloadly.
             
             ### 🛠️ iOS Installation Instructions:
-            1. **AltStore / SideStore:** Open `altstore://install?url=https://streamconnectroshni.duckdns.org/downloads/StreamSync.ipa`
-            2. **Safari WebClip (Zero Sideloading):** Visit `https://streamconnectroshni.duckdns.org` in Safari → Tap Share (↑) → Add to Home Screen.
+            1. **AltStore / SideStore:** Download `StreamSync.ipa` and open via AltStore or SideStore to sign with your Apple ID.
+            2. **Safari WebClip (Zero Sideloading / Recommended):** Visit `https://streamconnectroshni.duckdns.org` in Safari → Tap Share (↑) → Add to Home Screen.
           draft: false
           prerelease: false

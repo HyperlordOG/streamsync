@@ -1,0 +1,15 @@
+node_modules/
+**/node_modules/
+.DS_Store
+Thumbs.db
+*.log
+.env
+build/
+**/build/
+.gradle/
+**/.gradle/
+*.iml
+.idea/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcuserdatad/
