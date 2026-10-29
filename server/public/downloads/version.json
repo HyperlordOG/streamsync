@@ -1,0 +1,15 @@
+{
+  "version": "1.4.1",
+  "build": 104,
+  "android": {
+    "filename": "StreamSync.apk",
+    "url": "https://streamconnectroshni.duckdns.org/downloads/StreamSync.apk",
+    "updated": "2026-10-29"
+  },
+  "ios": {
+    "filename": "StreamSync.ipa",
+    "url": "https://streamconnectroshni.duckdns.org/downloads/StreamSync.ipa",
+    "altstoreUrl": "altstore://install?url=https://streamconnectroshni.duckdns.org/downloads/StreamSync.ipa",
+    "updated": "2026-10-29"
+  }
+}

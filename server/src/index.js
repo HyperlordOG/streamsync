@@ -69,6 +69,10 @@ async function bootstrap() {
     return reply.sendFile('index.html');
   });
 
+  fastify.get('/download', async (req, reply) => {
+    return reply.sendFile('download.html');
+  });
+
   // Short 6-character room codes directly in the path (e.g. /H7L3EX)
   fastify.get('/:id([A-Za-z0-9]{6})', async (req, reply) => {
     return reply.sendFile('index.html');
