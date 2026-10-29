@@ -8,8 +8,21 @@
     "allowNavigation": [
       "*.duckdns.org",
       "*.netflix.com",
+      "*.netflix.net",
+      "*.nflximg.net",
+      "*.nflxvideo.net",
+      "*.nflxext.com",
       "*.primevideo.com",
+      "*.amazon.com",
+      "*.amazon.in",
+      "*.amazon.co.uk",
+      "*.amazon.de",
+      "*.amazon.ca",
+      "*.media-amazon.com",
+      "*.aiv-cdn.net",
+      "*.aiv-delivery.net",
       "*.youtube.com",
+      "*.googlevideo.com",
       "*.disneyplus.com"
     ]
   },

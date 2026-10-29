@@ -24,6 +24,8 @@
     window.addEventListener('orientationchange', setVH);
     setVH();
   </script>
+  <script src="/js/capacitor.js"></script>
+  <script src="/js/capacitor-inappbrowser.js"></script>
   <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js'"></script>
   <script src="https://cdn.jsdelivr.net/npm/emoji-mart@5.6.0/dist/browser.js"></script>
@@ -795,9 +797,69 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 32px;
+      padding: 24px 20px;
       text-align: center;
-      z-index: 5;
+      z-index: 50;
+    }
+
+    .video-wrapper.drm-active .stream-controls-overlay,
+    .video-wrapper.drm-active .player-lock-floating-btn,
+    .video-wrapper.drm-active .sync-hud {
+      display: none !important;
+    }
+
+    /* In-App Web Viewer Sheet */
+    .inapp-websheet-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #090d16;
+      z-index: 9999999;
+      display: flex;
+      flex-direction: column;
+      animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .inapp-websheet-header {
+      padding: 12px 16px;
+      background: #111827;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 54px;
+    }
+    .inapp-websheet-title {
+      font-weight: 700;
+      font-size: 15px;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .inapp-websheet-body {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      position: relative;
+    }
+    .inapp-websheet-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .inapp-websheet-footer {
+      padding: 10px 16px;
+      background: #111827;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
     }
 
     .drm-service-badge {
@@ -1446,9 +1508,16 @@
 
   <!-- Navbar -->
   <header class="navbar">
-    <div class="brand" onclick="location.href='/'">
-      <div class="brand-logo">S</div>
-      <span class="brand-name">StreamSync</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div class="brand" onclick="handleBrandClick()" style="cursor: pointer;">
+        <div class="brand-logo">S</div>
+        <span class="brand-name">StreamSync</span>
+      </div>
+
+      <button class="btn-nav-browse" id="btn-theater-back" onclick="leavePartyToLobby()" style="display: none; background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 6px 12px; font-size: 13px; font-weight: 700;" title="Leave Watch Party and Return to Lobby">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        <span>Leave Party</span>
+      </button>
     </div>
 
     <div class="navbar-right">
@@ -1689,6 +1758,28 @@
       </div>
     </div>
 
+    <!-- Dedicated In-App Web Viewer Sheet -->
+    <div class="inapp-websheet-overlay" id="inapp-websheet-overlay" style="display: none;">
+      <div class="inapp-websheet-header">
+        <button class="btn btn-secondary" onclick="closeInAppWebSheet()" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; font-weight: 700;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to Party
+        </button>
+        <div class="inapp-websheet-title" id="inapp-websheet-title">Sign In & Browse</div>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn btn-secondary" onclick="reloadInAppWebSheet()" title="Reload" style="padding: 8px 12px; font-size: 12px;">⟳</button>
+          <button class="btn btn-primary" onclick="openDrmNativeAppIntent()" title="Launch Native App" style="padding: 8px 12px; font-size: 12px;">App ↗</button>
+        </div>
+      </div>
+      <div class="inapp-websheet-body" id="inapp-websheet-body">
+        <iframe id="inapp-websheet-iframe" src="about:blank" allow="autoplay; encrypted-media; fullscreen" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+      </div>
+      <div class="inapp-websheet-footer">
+        <span style="font-size: 12px; color: var(--text-muted);">🔒 Room Code: <strong id="inapp-room-badge" style="color: #fff;">ACTIVE</strong></span>
+        <button class="btn btn-primary" onclick="closeInAppWebSheet()" style="padding: 8px 16px; font-size: 13px; font-weight: 700;">Return to Party Room</button>
+      </div>
+    </div>
+
     <!-- THEATER VIEW -->
     <div class="theater-view" id="theater-view">
       <!-- Player Stage -->
@@ -1732,15 +1823,23 @@
             <div class="drm-service-badge" id="drm-service-badge">AMAZON PRIME VIDEO</div>
             <h2 class="drm-movie-title" id="drm-movie-title">Prime Video Watch Party</h2>
             <p class="drm-description">
-              Official streaming services (Prime Video & Netflix) protect media with Widevine DRM and cannot be decoded inside a generic HTML5 video element. StreamSync synchronizes your official Prime Video players across both profiles!
+              Sign in below directly inside StreamSync to sync movie playback with your party in real-time.
             </p>
-            <div class="drm-action-box">
-              <a href="#" target="_blank" class="btn btn-primary drm-launch-btn" id="drm-launch-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Launch on Prime Video (Auto-Sync)
-              </a>
-              <div class="drm-subtext">
-                Click above to open this title on Prime Video in this profile. The StreamSync extension will hook into the player and lock in sync!
+            <div class="drm-action-box" style="display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 440px; margin-top: 12px;">
+              <button type="button" class="btn btn-primary" id="btn-drm-inapp-login" onclick="openDrmInAppViewer()" style="width: 100%; padding: 14px; font-weight: 700; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Sign In inside StreamSync
+              </button>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-secondary" onclick="openDrmNativeAppIntent()" style="flex: 1; padding: 10px; font-size: 13px;" title="Launch installed native app">
+                  📱 Open Official App
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="syncDrmPartyPosition()" style="flex: 1; padding: 10px; font-size: 13px;" title="Broadcast sync timecode to room">
+                  ⚡ Sync Position
+                </button>
+              </div>
+              <div class="drm-subtext" style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+                Signing in keeps your session saved in StreamSync. Both devices stay synchronized in real time!
               </div>
             </div>
           </div>
@@ -1749,6 +1848,10 @@
         <!-- Info Bar -->
         <div class="player-info-bar">
           <div class="player-info-left">
+            <button class="btn btn-secondary leave-room-btn" onclick="leavePartyToLobby()" title="Leave party and return to lobby" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-weight: 700; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5; border-radius: 10px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              Leave Party
+            </button>
             <button class="btn btn-primary browse-trigger-btn" id="btn-browse-movies" onclick="toggleMovieBrowser(true)" title="Browse movies & shows to watch together">
               🎬 Browse Titles
             </button>
@@ -1879,16 +1982,80 @@
       }
     });
 
+    // Global Navigation & Android Back Button State Handler
+    function handleAppBack() {
+      // 1. If in-app browser sheet is open, close it
+      const webSheet = document.getElementById('inapp-websheet-overlay');
+      if (webSheet && webSheet.style.display !== 'none') {
+        closeInAppWebSheet();
+        return 'HANDLED';
+      }
+
+      // 2. If service modal is open, close it
+      const svcModal = document.getElementById('service-modal-overlay');
+      if (svcModal && svcModal.style.display !== 'none') {
+        closeServiceModal();
+        return 'HANDLED';
+      }
+
+      // 3. If movie drawer is open, close it
+      const drawer = document.getElementById('movie-browser-drawer');
+      if (drawer && drawer.classList.contains('open')) {
+        toggleMovieBrowser(false);
+        return 'HANDLED';
+      }
+
+      // 4. If in theater view, leave room and return to lobby
+      const theater = document.getElementById('theater-view');
+      if (theater && theater.style.display !== 'none') {
+        leavePartyToLobby();
+        return 'HANDLED';
+      }
+
+      // 5. At lobby -> allow default exit
+      return 'EXIT';
+    }
+    window.handleAppBack = handleAppBack;
+
+    function handleBrandClick() {
+      const theater = document.getElementById('theater-view');
+      if (theater && theater.style.display !== 'none') {
+        leavePartyToLobby();
+      } else {
+        location.href = '/';
+      }
+    }
+    window.handleBrandClick = handleBrandClick;
+
+    function leavePartyToLobby() {
+      if (partyPlayer) {
+        try { partyPlayer.destroy(); } catch (e) {}
+        partyPlayer = null;
+      }
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+        ws = null;
+      }
+      currentRoom = null;
+      document.querySelector('.video-wrapper')?.classList.remove('drm-active');
+      const theaterView = document.getElementById('theater-view');
+      const lobbyView = document.getElementById('lobby-view');
+      const backBtn = document.getElementById('btn-theater-back');
+      if (theaterView) theaterView.style.display = 'none';
+      if (lobbyView) lobbyView.style.display = 'grid';
+      if (backBtn) backBtn.style.display = 'none';
+
+      if (window.location.pathname !== '/' && !window.location.pathname.endsWith('index.html')) {
+        window.history.pushState({}, '', '/');
+      }
+    }
+    window.leavePartyToLobby = leavePartyToLobby;
+
     // Handle browser back/forward buttons smoothly
     window.addEventListener('popstate', (e) => {
-      const path = window.location.pathname;
-      if (!path.includes('/room/') && !path.includes('/party/') && !window.location.search.includes('party=') && !window.location.search.includes('room=')) {
-        if (document.getElementById('theater-view').style.display !== 'none') {
-          if (partyPlayer) partyPlayer.destroy();
-          if (ws) ws.close();
-          document.getElementById('theater-view').style.display = 'none';
-          document.getElementById('lobby-view').style.display = 'grid';
-        }
+      const res = handleAppBack();
+      if (res === 'HANDLED') {
+        return;
       }
     });
 
@@ -2085,22 +2252,94 @@
       if (inp) inp.value = url;
     }
 
+    function openDrmInAppViewer() {
+      const provider = currentRoom?.video?.provider || 'prime';
+      const url = currentRoom?.video?.url || (provider === 'prime' ? 'https://www.primevideo.com' : 'https://www.netflix.com');
+      openInAppWebSheet(provider, url);
+    }
+
+    function openDrmNativeAppIntent() {
+      const provider = currentRoom?.video?.provider || 'prime';
+      const scheme = provider === 'prime' ? 'primevideo://' : 'nflx://';
+      window.location.href = scheme;
+    }
+
+    function syncDrmPartyPosition() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'SYNC_TIME',
+          timestamp: Date.now()
+        }));
+      }
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = '⚡ Broadcasted Party Sync Position!';
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2500);
+      }
+    }
+
+    function openInAppWebSheet(provider, url) {
+      // 1. If native Capacitor InAppBrowser is available in APK:
+      const cap = window.Capacitor;
+      if (cap?.Plugins?.InAppBrowser) {
+        try {
+          const iab = cap.Plugins.InAppBrowser;
+          if (typeof iab.openInWebView === 'function') {
+            iab.openInWebView({
+              url,
+              options: {
+                showToolbar: true,
+                showURL: true,
+                closeButtonText: 'Back to Party',
+                clearCache: false,
+                clearSessionCache: false,
+                hardwareBack: true,
+                allowZoom: true
+              }
+            });
+            return;
+          } else if (typeof iab.open === 'function') {
+            iab.open({ url });
+            return;
+          }
+        } catch (err) {
+          console.warn('Capacitor InAppBrowser failed, fallback to in-DOM sheet:', err);
+        }
+      }
+
+      // 2. In-DOM sheet inside StreamSync
+      const sheet = document.getElementById('inapp-websheet-overlay');
+      const iframe = document.getElementById('inapp-websheet-iframe');
+      const title = document.getElementById('inapp-websheet-title');
+      const badge = document.getElementById('inapp-room-badge');
+
+      if (title) title.textContent = provider === 'prime' ? 'Amazon Prime Video' : 'Netflix';
+      if (badge && currentRoom) badge.textContent = currentRoom.short_id || 'ACTIVE';
+      if (iframe) iframe.src = url;
+      if (sheet) sheet.style.display = 'flex';
+    }
+
+    function closeInAppWebSheet() {
+      const sheet = document.getElementById('inapp-websheet-overlay');
+      const iframe = document.getElementById('inapp-websheet-iframe');
+      if (sheet) sheet.style.display = 'none';
+      if (iframe) iframe.src = 'about:blank';
+    }
+
+    function reloadInAppWebSheet() {
+      const iframe = document.getElementById('inapp-websheet-iframe');
+      if (iframe && iframe.src) iframe.src = iframe.src;
+    }
+
     function openNetflixInApp() {
       const netflixUrl = document.getElementById('netflix-watch-url')?.value?.trim() || 'https://www.netflix.com';
-      if (window.Capacitor?.Plugins?.InAppBrowser) {
-        window.Capacitor.Plugins.InAppBrowser.open({ url: netflixUrl });
-      } else {
-        window.open(netflixUrl, '_blank');
-      }
+      openInAppWebSheet('netflix', netflixUrl);
     }
 
     function openPrimeInApp() {
       const primeUrl = document.getElementById('prime-watch-url')?.value?.trim() || 'https://www.primevideo.com';
-      if (window.Capacitor?.Plugins?.InAppBrowser) {
-        window.Capacitor.Plugins.InAppBrowser.open({ url: primeUrl });
-      } else {
-        window.open(primeUrl, '_blank');
-      }
+      openInAppWebSheet('prime', primeUrl);
     }
 
     function copyExtensionHelp() {
@@ -2119,6 +2358,12 @@
     window.openNetflixInApp = openNetflixInApp;
     window.openPrimeInApp = openPrimeInApp;
     window.copyExtensionHelp = copyExtensionHelp;
+    window.openDrmInAppViewer = openDrmInAppViewer;
+    window.openDrmNativeAppIntent = openDrmNativeAppIntent;
+    window.syncDrmPartyPosition = syncDrmPartyPosition;
+    window.openInAppWebSheet = openInAppWebSheet;
+    window.closeInAppWebSheet = closeInAppWebSheet;
+    window.reloadInAppWebSheet = reloadInAppWebSheet;
 
     // Handle Create Room
     async function handleCreateRoom() {
@@ -2225,26 +2470,23 @@
       const isDrmProvider = roomData.video?.provider === 'prime' || roomData.video?.provider === 'netflix';
       const playerEl = document.getElementById('media-player');
       const drmCardEl = document.getElementById('drm-theater-card');
+      const videoWrapper = document.querySelector('.video-wrapper');
+      const backNavBtn = document.getElementById('btn-theater-back');
+
+      if (backNavBtn) backNavBtn.style.display = 'inline-flex';
 
       if (isDrmProvider) {
         playerEl.style.display = 'none';
         drmCardEl.style.display = 'flex';
+        videoWrapper?.classList.add('drm-active');
 
         const providerName = roomData.video.provider === 'prime' ? 'Amazon Prime Video' : 'Netflix';
         document.getElementById('drm-service-badge').textContent = `${providerName.toUpperCase()} WATCH PARTY`;
         document.getElementById('drm-movie-title').textContent = roomData.video.title || `${providerName} Stream`;
-
-        const launchBtn = document.getElementById('drm-launch-btn');
-        const streamUrl = roomData.video.url || (roomData.video.provider === 'prime' ? 'https://www.primevideo.com' : 'https://www.netflix.com');
-        const sep = streamUrl.includes('?') ? '&' : '?';
-        launchBtn.href = `${streamUrl}${sep}streamsync_party=${roomData.short_id}`;
-        launchBtn.innerHTML = `
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Open Title on ${providerName}
-        `;
       } else {
         playerEl.style.display = 'block';
         drmCardEl.style.display = 'none';
+        videoWrapper?.classList.remove('drm-active');
       }
 
       // Initialize PartyPlayer
