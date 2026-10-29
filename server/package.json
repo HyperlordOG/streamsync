@@ -1,6 +1,6 @@
 {
   "name": "streamsync-server",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "StreamSync - Synchronized Watch Party Relay Server",
   "main": "src/index.js",
   "type": "module",

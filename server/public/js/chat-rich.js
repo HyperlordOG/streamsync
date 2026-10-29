@@ -1139,7 +1139,7 @@ export default class RichChat {
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
         overscroll-behavior: contain !important;
-        scroll-behavior: smooth !important;
+        scroll-behavior: auto !important;
         touch-action: pan-y !important;
       }
 

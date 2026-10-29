@@ -543,16 +543,6 @@ export class MovieBrowser {
         }
       });
     });
-
-    // Laptop & Trackpad Wheel Scrolling Bridge for .sb-content
-    const content = this.container.querySelector('.sb-content');
-    if (content) {
-      content.addEventListener('wheel', (e) => {
-        if (e.deltaY) {
-          content.scrollTop += e.deltaY;
-        }
-      }, { passive: true });
-    }
   }
 
   async init() {

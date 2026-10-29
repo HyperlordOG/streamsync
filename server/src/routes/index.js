@@ -161,7 +161,7 @@ export async function registerRoutes(fastify) {
 
   // ── GET /api/version ──────────────────────────────────────────────────────
   fastify.get('/api/version', async () => ({
-    version: '1.4.0',
+    version: '1.4.1',
   }));
 
   // ── GET /api/time ─────────────────────────────────────────────────────────

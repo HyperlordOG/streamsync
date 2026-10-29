@@ -66,3 +66,4 @@ describe('Multi-Device Room Registry & Host Failover Suite', () => {
     assert.strictEqual(room.creator_id, 'user_bob', 'Host status cleanly transfers to Bob after all Alice devices leave');
   });
 });
+

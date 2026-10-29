@@ -852,7 +852,7 @@
       overflow-y: auto !important;
       -webkit-overflow-scrolling: touch !important; /* iOS momentum scroll */
       overscroll-behavior: contain !important;      /* prevent scroll chaining to parent */
-      scroll-behavior: smooth !important;
+      scroll-behavior: auto !important;
       touch-action: pan-y !important;               /* tell browser this element handles vertical touch */
     }
 
@@ -1728,9 +1728,11 @@
         }
       };
 
-      // Set default audio clarity boost (150%)
-      const boostVal = document.getElementById('audio-boost-select')?.value || '1.5';
-      partyPlayer.audioEnhancer.setBoost(Number(boostVal));
+      // Ensure native audio is unmuted and at 100% hardware volume
+      if (partyPlayer.video) {
+        partyPlayer.video.muted = false;
+        partyPlayer.video.volume = 1.0;
+      }
 
       if (roomData.video) {
         partyPlayer.currentVideo = {

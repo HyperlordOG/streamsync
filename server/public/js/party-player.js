@@ -16,18 +16,17 @@
  */
 
 export function getDriftAction(currentMs, targetMs, isPaused = false) {
-  // Root cause B fix: round both currentMs and targetMs to nearest 100ms
-  // Eliminates sub-100ms false positives between iOS Safari (centisecond) and Android Chrome (microsecond)
+  // Round both currentMs and targetMs to nearest 100ms to eliminate sub-100ms jitter
   const roundedCurrent = Math.round(currentMs / 100) * 100;
   const roundedTarget = Math.round(targetMs / 100) * 100;
   const deltaMs = roundedTarget - roundedCurrent;
   const absDeltaMs = Math.abs(deltaMs);
 
-  if (absDeltaMs >= 2000) {
+  if (absDeltaMs > 500) {
     return { type: 'seek', targetMs, targetSec: targetMs / 1000, deltaMs, zone: 'ZONE 3 [Hard Seek]' };
-  } else if (absDeltaMs >= 400 && !isPaused) {
-    const rate = deltaMs > 0 ? 1.05 : 0.95;
-    return { type: 'rate', rate, deltaMs, zone: deltaMs > 0 ? 'ZONE 1 [Slew Fast +5%]' : 'ZONE 1 [Slew Slow -5%]' };
+  } else if (absDeltaMs > 150 && !isPaused) {
+    const rate = deltaMs > 0 ? 1.08 : 0.92;
+    return { type: 'rate', rate, deltaMs, zone: deltaMs > 0 ? 'ZONE 1 [Slew Fast +8%]' : 'ZONE 1 [Slew Slow -8%]' };
   }
   return { type: 'rate', rate: 1.0, deltaMs, zone: 'ZONE 0 [In Sync]' };
 }
@@ -77,67 +76,31 @@ export async function ensureHlsLoaded() {
 /**
  * Web Audio API Speech Clarity & Volume Boost Engine
  */
+/**
+ * Safe Volume & Audio Controller
+ * Protects native hardware audio output from Web Audio CORS muting/silencing
+ */
 export class AudioEnhancer {
   constructor(videoEl) {
     this.video = videoEl;
-    this.ctx = null;
-    this.source = null;
-    this.gainNode = null;
-    this.compressor = null;
-    this.clarityFilter = null;
-    this.isInitialized = false;
-    this.boostLevel = 1.5; // Default 150% Clear Speech
+    this.boostLevel = 1.0;
+    this.isInitialized = true;
   }
 
   init() {
-    if (this.isInitialized) return;
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      this.ctx = new AudioCtx();
-
-      // Dialogue intelligibility peaking filter (@ 2.8kHz boosts consonants & human voice clarity)
-      this.clarityFilter = this.ctx.createBiquadFilter();
-      this.clarityFilter.type = 'peaking';
-      this.clarityFilter.frequency.value = 2800;
-      this.clarityFilter.Q.value = 1.2;
-      this.clarityFilter.gain.value = 4.5; // +4.5dB speech lift
-
-      // Dynamics Compressor (lifts whisper-quiet dialogue, tames harsh explosions)
-      this.compressor = this.ctx.createDynamicsCompressor();
-      this.compressor.threshold.setValueAtTime(-24, this.ctx.currentTime);
-      this.compressor.knee.setValueAtTime(30, this.ctx.currentTime);
-      this.compressor.ratio.setValueAtTime(12, this.ctx.currentTime);
-      this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
-      this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
-
-      // Volume Gain Node (100% to 300% boost)
-      this.gainNode = this.ctx.createGain();
-      this.gainNode.gain.setValueAtTime(this.boostLevel, this.ctx.currentTime);
-
-      // Hook video element to Web Audio graph
-      this.source = this.ctx.createMediaElementSource(this.video);
-      this.source.connect(this.clarityFilter);
-      this.clarityFilter.connect(this.compressor);
-      this.compressor.connect(this.gainNode);
-      this.gainNode.connect(this.ctx.destination);
-
-      this.isInitialized = true;
-    } catch (err) {
-      console.warn('[AudioEnhancer] Web Audio API init warning:', err);
+    // Preserve native HTML5 <video> hardware audio pipeline.
+    // createMediaElementSource is omitted because Chromium/Android silences cross-origin video streams.
+    if (this.video) {
+      this.video.muted = false;
+      this.video.volume = 1.0;
     }
   }
 
   setBoost(level) {
     this.boostLevel = Number(level) || 1.0;
-    if (!this.isInitialized) {
-      this.init();
-    }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
-    if (this.gainNode && this.ctx) {
-      this.gainNode.gain.setTargetAtTime(this.boostLevel, this.ctx.currentTime, 0.05);
+    if (this.video) {
+      this.video.muted = false;
+      this.video.volume = 1.0;
     }
   }
 }
@@ -203,6 +166,10 @@ export class PartyPlayer {
     this.subtitleTracks = [];
     this.activeSubtitleUrl = null;
 
+    // Ensure video is unmuted with full volume for cross-platform audio
+    this.video.muted = false;
+    this.video.volume = 1.0;
+
     // Audio Enhancer
     this.audioEnhancer = new AudioEnhancer(this.video);
 
@@ -225,9 +192,10 @@ export class PartyPlayer {
     // Start drift loop immediately (decoupled from canplay / late joiners)
     this.startDriftLoop();
 
-    // Auto-init audio on user first click anywhere on video
+    // Auto-unmute and full volume on user first click anywhere on video
     this.video.addEventListener('click', () => {
-      this.audioEnhancer.setBoost(this.audioEnhancer.boostLevel);
+      this.video.muted = false;
+      this.video.volume = 1.0;
     }, { once: true });
   }
 
@@ -1123,7 +1091,7 @@ export class PartyPlayer {
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
         overscroll-behavior: contain !important;
-        scroll-behavior: smooth !important;
+        scroll-behavior: auto !important;
         touch-action: pan-y !important;
       }
 
@@ -3101,6 +3069,8 @@ export class PartyPlayer {
           e.stopPropagation();
           this._hidePlayPrompt();
           try {
+            this.video.muted = false;
+            this.video.volume = 1.0;
             await this.video.play();
             // Root cause D fix: seek to computeDesiredPosition(Date.now()) after play resolves
             const freshDesiredMs = this.getDesiredPositionMs();
@@ -3672,7 +3642,22 @@ export class PartyPlayer {
           this.syncToPosition(desiredPosMs);
           this.startDriftLoop();
           this.hideLoading();
+          this.video.muted = false;
+          this.video.volume = 1.0;
           this.video.play().catch(() => this._showPlayPrompt());
+
+          // Re-verify seek on loadeddata/canplay to guarantee Android HLS decoder buffer did not reset to 0:00
+          const onMediaDecoded = () => {
+            const freshDesired = this.getDesiredPositionMs();
+            if (freshDesired > 500 && Math.abs(this.video.currentTime * 1000 - freshDesired) > 500) {
+              this.video.currentTime = freshDesired / 1000;
+            }
+            this.correctDrift();
+          };
+          if (typeof this.video.addEventListener === 'function') {
+            this.video.addEventListener('loadeddata', onMediaDecoded, { once: true });
+            this.video.addEventListener('canplay', onMediaDecoded, { once: true });
+          }
           finish();
         });
 
@@ -3914,21 +3899,28 @@ export class PartyPlayer {
     const driftMs = targetMs - currentMs;
     this.lastDriftMs = driftMs;
 
-    // Check buffer readiness (Failure 2 fix: prevent accumulation window on mobile buffering)
-    if (!this.video.readyState || this.video.readyState < 3) {
+    // Check buffer readiness (only pause if media has not loaded current frame)
+    if (!this.video.readyState || this.video.readyState < 2) {
       this._updateDebugHud(driftMs, 'WAITING_FOR_BUFFER', this.video.playbackRate);
       this._handleSyncRecoveryBanner(driftMs);
       return;
     }
 
     // 5 Discrete Zones:
-    if (Math.abs(driftMs) > 3000) {
+    // HARD SEEK: |drift| > 500ms (Immediately snaps to target position)
+    if (Math.abs(driftMs) > 500) {
       this._updateDebugHud(driftMs, 'SEEKING', this.video.playbackRate);
       this.seekInProgress = true;
+      this.isRemoteSync.current = true;
+      this.ignoreEventsUntil = Date.now() + 1500;
       const safeTarget = Math.max(0, dur ? Math.min(targetMs / 1000, Math.max(0, dur - 0.5)) : targetMs / 1000);
       this.video.currentTime = safeTarget;
+      if (this.video.playbackRate !== 1.0) {
+        this.video.playbackRate = 1.0;
+      }
     } else if (Math.abs(driftMs) > 150) {
-      const rate = driftMs > 0 ? 1.05 : 0.95;
+      // SLEWING: 150ms < |drift| <= 500ms (Dynamic slew rate at +8% / -8% for rapid convergence)
+      const rate = driftMs > 0 ? 1.08 : 0.92;
       this._updateDebugHud(driftMs, 'SLEWING', rate);
       if (!isPaused) {
         this.video.playbackRate = rate;
@@ -3936,6 +3928,7 @@ export class PartyPlayer {
         this.video.playbackRate = 1.0;
       }
     } else {
+      // DEADBAND: |drift| <= 150ms (Locked in sync)
       this._updateDebugHud(driftMs, 'DEADBAND', 1.0);
       if (this.video.playbackRate !== 1.0) {
         this.video.playbackRate = 1.0;

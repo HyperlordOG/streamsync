@@ -23,8 +23,8 @@ describe('Drift Correction Engine, rAF Loop & 5 Zones Suite', () => {
   test('2. All 5 discrete drift zones evaluate and transition accurately', () => {
     function computeZone(driftMs, readyState, seekInProgress) {
       if (seekInProgress) return 'WAITING_FOR_SEEK';
-      if (readyState < 3) return 'WAITING_FOR_BUFFER';
-      if (Math.abs(driftMs) > 3000) return 'SEEKING';
+      if (readyState < 2) return 'WAITING_FOR_BUFFER';
+      if (Math.abs(driftMs) > 500) return 'SEEKING';
       if (Math.abs(driftMs) > 150) return 'SLEWING';
       return 'DEADBAND';
     }
@@ -33,19 +33,20 @@ describe('Drift Correction Engine, rAF Loop & 5 Zones Suite', () => {
     assert.strictEqual(computeZone(80, 4, false), 'DEADBAND');
     assert.strictEqual(computeZone(-120, 4, false), 'DEADBAND');
 
-    // 2. SLEWING: 150ms < |drift| <= 3000ms
-    assert.strictEqual(computeZone(450, 4, false), 'SLEWING');
-    assert.strictEqual(computeZone(-2500, 4, false), 'SLEWING');
+    // 2. SLEWING: 150ms < |drift| <= 500ms
+    assert.strictEqual(computeZone(250, 4, false), 'SLEWING');
+    assert.strictEqual(computeZone(-450, 4, false), 'SLEWING');
 
-    // 3. SEEKING: |drift| > 3000ms
-    assert.strictEqual(computeZone(3050, 4, false), 'SEEKING');
+    // 3. SEEKING: |drift| > 500ms (Immediately hard-seeks 1s, 2.5s, 10s, 106s drift)
+    assert.strictEqual(computeZone(550, 4, false), 'SEEKING');
+    assert.strictEqual(computeZone(1000, 4, false), 'SEEKING');
     assert.strictEqual(computeZone(106200, 4, false), 'SEEKING');
 
     // 4. WAITING_FOR_SEEK: seek in progress
     assert.strictEqual(computeZone(106200, 4, true), 'WAITING_FOR_SEEK');
 
-    // 5. WAITING_FOR_BUFFER: readyState < 3
-    assert.strictEqual(computeZone(500, 2, false), 'WAITING_FOR_BUFFER');
+    // 5. WAITING_FOR_BUFFER: readyState < 2
+    assert.strictEqual(computeZone(500, 1, false), 'WAITING_FOR_BUFFER');
   });
 
   test('3. Sync Recovery Banner triggers on sustained high drift (> 5000ms for 10s)', () => {
@@ -83,3 +84,4 @@ describe('Drift Correction Engine, rAF Loop & 5 Zones Suite', () => {
     assert.strictEqual(bannerVisible, false, 'Banner must hide when drift resolves');
   });
 });
+

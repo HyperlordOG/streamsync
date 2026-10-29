@@ -97,3 +97,4 @@ describe('Android HLS.js Engine & Fallback CDN Suite', () => {
     assert.strictEqual(bannerTitle, 'Loading video engine...', 'Loading overlay must be displayed for Android HLS');
   });
 });
+
