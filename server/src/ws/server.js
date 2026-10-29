@@ -1,4 +1,4 @@
-﻿/**
+/**
  * StreamSync - WebSocket Server
  * RFC 6455 raw WebSocket. No Socket.IO.
  * Handles connection lifecycle: auth, room join, presence, disconnect.
@@ -14,6 +14,7 @@ import {
   removePeer,
   broadcast,
   roomSnapshot,
+  getRoomUsers,
 } from '../core/registry.js';
 import { handleMessage } from './handlers.js';
 
@@ -57,6 +58,11 @@ export async function registerWsServer(fastify) {
       is_owner,
     };
 
+    // Attach explicit socket IDs and user metadata for multi-device support
+    socket.socketId = conn_id;
+    socket.userId = user_id;
+    socket.displayName = user.display_name;
+
     addPeer(room.party_id, conn_id, socket, user);
 
     console.log(`[WS] ${user.display_name} joined ${room.short_id} (${room.party_id}) conn=${conn_id}`);
@@ -67,10 +73,13 @@ export async function registerWsServer(fastify) {
       ...roomSnapshot(room),
     }));
 
-    // Announce the updated user list to ALL peers
+    // Announce the updated user list to ALL peers (deduplicated users + connectionCount)
+    const initialUsers = getRoomUsers(room);
     broadcast(room.party_id, {
       type: 'users',
-      users: roomSnapshot(room).users,
+      users: initialUsers.users,
+      connectionCount: initialUsers.connectionCount,
+      host_id: room.creator_id,
     });
 
     // ── Message routing ────────────────────────────────────────────────────
@@ -86,9 +95,34 @@ export async function registerWsServer(fastify) {
 
       const updatedRoom = getRoom(room.party_id);
       if (updatedRoom) {
+        // Host failover logic:
+        // if the host's socket disconnects but they have another device still connected in the same room,
+        // do NOT transfer host status — check if any remaining connection has the same userId as the departing host
+        // before electing a new host.
+        if (user.id === updatedRoom.creator_id) {
+          const hasAnotherDevice = Array.from(updatedRoom.peers.values()).some(
+            ({ user: u }) => u.id === updatedRoom.creator_id
+          );
+          if (!hasAnotherDevice && updatedRoom.peers.size > 0) {
+            const nextHostUser = updatedRoom.peers.values().next().value.user;
+            updatedRoom.creator_id = nextHostUser.id;
+            console.log(`[WS] Host failover: transferred host status to ${nextHostUser.display_name} (${nextHostUser.id})`);
+            updatedRoom.peers.forEach((peer) => {
+              peer.user.is_owner = (peer.user.id === updatedRoom.creator_id);
+            });
+            broadcast(room.party_id, {
+              type: 'party',
+              ...roomSnapshot(updatedRoom),
+            });
+          }
+        }
+
+        const roomUsers = getRoomUsers(updatedRoom);
         broadcast(room.party_id, {
           type: 'users',
-          users: roomSnapshot(updatedRoom).users,
+          users: roomUsers.users,
+          connectionCount: roomUsers.connectionCount,
+          host_id: updatedRoom.creator_id,
         });
       }
     });

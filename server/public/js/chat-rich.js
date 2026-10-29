@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * StreamSync - Rich Chat System (Phase 2)
  * WhatsApp-style in-party messaging with Emoji Picker, Sticker Packs,

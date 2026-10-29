@@ -72,3 +72,4 @@ test('StreamSync GIF Loading, Proxy & Layout Suite', async (t) => {
     assert.ok(chatCode.includes('GIFs unavailable'), 'Must render GIFs unavailable fallback on error');
   });
 });
+

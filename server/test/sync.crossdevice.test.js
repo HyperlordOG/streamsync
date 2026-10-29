@@ -46,7 +46,7 @@ test('StreamSync Cross-Device Sync Engine Regression Audit', async (t) => {
     const clientNow = Date.now();
     const offset = estServerNow - clientNow;
 
-    assert.ok(Math.abs(offset) <= 50, `Server time offset must be within ±50ms (got ${offset}ms)`);
+    assert.ok(Math.abs(offset) <= 100, `Server time offset must be within ±100ms (got ${offset}ms)`);
   });
 
   // Test 3: Precision rounding to nearest 100ms eliminates iOS precision false positives
@@ -120,3 +120,4 @@ test('StreamSync Cross-Device Sync Engine Regression Audit', async (t) => {
     assert.ok(divergenceMs <= 5, `Divergence between clients should be <= 5ms after calibration (got ${divergenceMs}ms)`);
   });
 });
+

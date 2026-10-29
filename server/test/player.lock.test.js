@@ -64,3 +64,4 @@ test('StreamSync Player Lock Screen Feature Suite', async (t) => {
     assert.ok(code.includes('touch-target'), 'Lock button must have touch-target class');
   });
 });
+

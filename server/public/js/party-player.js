@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * StreamSync - Party Player Client Module (Streamo Feature-Parity Edition)
  * 
@@ -38,6 +39,39 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * Guaranteed HLS.js loading sequence with primary and fallback CDN
+ * Fixes Android black screen when CDN is slow or blocked by ad-blocker / data-saver
+ */
+export async function ensureHlsLoaded() {
+  if (typeof window !== 'undefined' && typeof window.Hls !== 'undefined') {
+    return true;
+  }
+  if (typeof document === 'undefined') return false;
+
+  return new Promise((resolve) => {
+    if (typeof window.Hls !== 'undefined') return resolve(true);
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';
+    script.async = true;
+    script.onload = () => resolve(typeof window.Hls !== 'undefined');
+    script.onerror = () => {
+      console.warn('[PartyPlayer] Primary HLS CDN blocked or failed, attempting cdnjs fallback...');
+      const fallback = document.createElement('script');
+      fallback.src = 'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js';
+      fallback.async = true;
+      fallback.onload = () => resolve(typeof window.Hls !== 'undefined');
+      fallback.onerror = () => {
+        console.error('[PartyPlayer] Both primary and fallback HLS CDNs failed to load');
+        resolve(false);
+      };
+      document.head.appendChild(fallback);
+    };
+    document.head.appendChild(script);
+  });
 }
 
 /**
@@ -157,8 +191,12 @@ export class PartyPlayer {
 
     // Drift loop control
     this.driftRafId = null;
-    this.lastDriftCheck = 0;
+    this.lastCorrectionTime = 0;
+    this.CORRECTION_INTERVAL = 500;
     this.isDriftRunning = false;
+    this.seekInProgress = false;
+    this.highDriftSince = null;
+    this.lastDriftMs = 0;
 
     // Subtitle tracks
     this.trackEl = null;
@@ -183,6 +221,9 @@ export class PartyPlayer {
 
     // Attach local video event listeners
     this._bindVideoEvents();
+
+    // Start drift loop immediately (decoupled from canplay / late joiners)
+    this.startDriftLoop();
 
     // Auto-init audio on user first click anywhere on video
     this.video.addEventListener('click', () => {
@@ -234,7 +275,7 @@ export class PartyPlayer {
         pointer-events: none;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
+        justify-content: flex-end;
         z-index: 10 !important;
         opacity: 0;
         transition: opacity 0.25s ease;
@@ -245,12 +286,42 @@ export class PartyPlayer {
         opacity: 1;
       }
 
-      .stream-controls-top {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        padding: 14px 18px;
-        pointer-events: auto;
+      /* Floating Lock Button — always visible, outside controls overlay */
+      .player-lock-floating-btn {
+        position: absolute !important;
+        top: 10px !important;
+        right: 10px !important;
+        z-index: 200 !important;
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+        background: rgba(0, 0, 0, 0.45) !important;
+        border: none !important;
+        border-radius: 50% !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 17px !important;
+        touch-action: manipulation !important;
+        -webkit-touch-callout: none !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        pointer-events: auto !important;
+        transition: background 0.2s ease, transform 0.15s ease !important;
+        opacity: 0;
+        transition: opacity 0.25s ease, background 0.2s ease !important;
+      }
+      /* Show floating lock button when controls are visible OR when locked */
+      .video-wrapper:hover .player-lock-floating-btn,
+      .video-wrapper.is-paused .player-lock-floating-btn,
+      .video-wrapper.player-locked .player-lock-floating-btn {
+        opacity: 1 !important;
+      }
+      .player-lock-floating-btn:active {
+        transform: scale(0.88) !important;
+        background: rgba(0, 0, 0, 0.75) !important;
       }
 
       .stream-controls-bar {
@@ -417,14 +488,12 @@ export class PartyPlayer {
         bottom: 74px;
         right: 18px;
         width: 320px;
-        background: rgba(15, 23, 42, 0.96);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
+        background: #0d1526;
         border: 1px solid rgba(255, 255, 255, 0.14);
         border-radius: 16px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
         color: #f8fafc;
-        z-index: 400 !important;
+        z-index: 500 !important;
         display: none;
         flex-direction: column;
         overflow: hidden;
@@ -650,24 +719,35 @@ export class PartyPlayer {
 
       /* In-Player Episode Drawer */
       .stream-episodes-drawer {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: 380px;
-        max-width: 90vw;
-        background: rgba(13, 17, 23, 0.95);
-        backdrop-filter: blur(20px);
-        border-left: 1px solid rgba(255, 255, 255, 0.12);
-        z-index: 50;
-        transform: translateX(100%);
-        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        display: flex;
-        flex-direction: column;
-        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
+        position: fixed !important;
+        top: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 380px !important;
+        max-width: 90vw !important;
+        height: 100dvh !important;
+        background: #0d1526 !important;
+        border-left: 1px solid rgba(255, 255, 255, 0.15) !important;
+        z-index: 999999 !important;
+        transform: translateX(100%) !important;
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8) !important;
+        overflow: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
       }
       .stream-episodes-drawer.open {
-        transform: translateX(0);
+        transform: translateX(0) !important;
+      }
+      @media (max-width: 768px) {
+        .stream-episodes-drawer {
+          width: 100vw !important;
+          max-width: 100vw !important;
+          left: 0 !important;
+          right: 0 !important;
+          border-left: none !important;
+        }
       }
       .stream-ep-drawer-header {
         padding: 16px 20px;
@@ -918,7 +998,34 @@ export class PartyPlayer {
       .party-play-prompt.active {
         display: flex !important;
       }
-      /* Fix 5: Player Lock Screen Feature */
+      /* Fix 5: Player Lock Screen — hides controls overlay, floating lock btn stays visible */
+      .player-lock-overlay {
+        position: absolute !important;
+        inset: 0 !important;
+        z-index: 100 !important;
+        display: none !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: transparent !important;
+        touch-action: none !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+      }
+      .video-wrapper.player-locked .player-lock-overlay {
+        display: flex !important;
+        pointer-events: all !important;
+      }
+      .unlock-hint {
+        color: rgba(255, 255, 255, 0.6) !important;
+        font-size: clamp(12px, 3vw, 16px) !important;
+        padding: 8px 16px !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 20px !important;
+        background: rgba(0, 0, 0, 0.4) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        display: none !important; /* Tap to unlock hint element */
+      }
       .video-wrapper.player-locked .video-controls,
       .video-wrapper.player-locked .stream-controls-overlay,
       .video-wrapper.player-locked .stream-controls-bar,
@@ -928,74 +1035,13 @@ export class PartyPlayer {
         opacity: 0 !important;
       }
 
-      .player-lock-overlay {
-        position: absolute !important;
-        inset: 0 !important;
-        z-index: 100 !important;
-        display: none !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background: transparent !important;
-        touch-action: none !important; /* iOS swipe-back prevent */
-        user-select: none !important;  /* Android selection popup prevent */
-        -webkit-user-select: none !important;
-      }
-
-      .video-wrapper.player-locked .player-lock-overlay {
-        display: flex !important;
-        pointer-events: all !important;
-      }
-
-      .unlock-hint {
-        color: rgba(255, 255, 255, 0.7);
-        font-size: clamp(12px, 3vw, 16px);
-        padding: 8px 16px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 20px;
-        background: rgba(0, 0, 0, 0.4);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
-        user-select: none;
-        -webkit-user-select: none;
-        touch-action: manipulation;
-      }
-
-      .unlock-hint:active {
-        transform: scale(0.95);
-        background: rgba(0, 0, 0, 0.75);
-        color: #fff;
-      }
-
-      .stream-lock-btn {
-        background: transparent;
-        border: none;
-        color: #f1f5f9;
-        cursor: pointer;
-        border-radius: 8px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        touch-action: manipulation;
-      }
-
-      .stream-lock-icon, .stream-lock-icon-bottom {
-        display: inline-block;
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      }
-
-      .stream-lock-icon.anim-scale, .stream-lock-icon-bottom.anim-scale {
-        animation: lockToggleScale 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      }
-
       @keyframes lockToggleScale {
         0% { transform: scale(0.6); }
         50% { transform: scale(1.35); }
         100% { transform: scale(1); }
+      }
+      .lock-anim {
+        animation: lockToggleScale 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
       .party-play-prompt-card {
         display: flex !important;
@@ -1040,10 +1086,8 @@ export class PartyPlayer {
       .streamo-settings-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.65);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        z-index: 401 !important;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 450 !important;
         display: none;
       }
 
@@ -1144,9 +1188,38 @@ export class PartyPlayer {
         #btn-player-pip {
           display: none !important;
         }
+        /* Hide cast + quality pill on narrow mobile — too many buttons */
+        #btn-player-cast {
+          display: none !important;
+        }
+        /* Hide quality pill entirely on mobile (was just resizing before) */
         #btn-player-quality-pill {
-          padding: 3px 6px !important;
-          font-size: 10px !important;
+          display: none !important;
+        }
+        /* Episode button inside player controls on mobile (matches laptop behavior) */
+        #btn-player-episodes {
+          padding: 4px 8px !important;
+          font-size: 11px !important;
+          gap: 4px !important;
+          min-height: 36px !important;
+          border-radius: 6px !important;
+          background: rgba(255, 255, 255, 0.12) !important;
+          touch-action: manipulation !important;
+          -webkit-tap-highlight-color: transparent !important;
+        }
+        #btn-player-episodes svg {
+          width: 14px !important;
+          height: 14px !important;
+          flex-shrink: 0 !important;
+        }
+        /* Prevent right button group from overflowing the controls bar */
+        .stream-buttons-row {
+          overflow: hidden !important;
+          flex-wrap: nowrap !important;
+        }
+        .stream-btn-group:last-child {
+          flex-shrink: 1 !important;
+          overflow: hidden !important;
         }
         /* Settings popover as bottom sheet drawer on mobile */
         .mobile-sheet-handle-bar {
@@ -1160,13 +1233,15 @@ export class PartyPlayer {
           top: auto !important;
           width: 100vw !important;
           max-width: 100vw !important;
-          max-height: 75vh !important;
+          max-height: 80vh !important;
           border-radius: 20px 20px 0 0 !important;
-          z-index: 400 !important;
-          box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.9) !important;
+          z-index: 500 !important;
+          box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.95) !important;
           border: 1px solid rgba(255, 255, 255, 0.15) !important;
           border-bottom: none !important;
-          background: rgba(15, 23, 42, 0.98) !important;
+          background: #0d1526 !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
           overflow: hidden !important;
         }
         .settings-content-pane {
@@ -1206,6 +1281,14 @@ export class PartyPlayer {
     `;
     this.container.appendChild(this.countdownOverlay);
 
+    // Make countdown overlay tap-dismissable so it never blocks video playback
+    if (typeof this.countdownOverlay.addEventListener === 'function') {
+      this.countdownOverlay.addEventListener('click', () => {
+        this.hideCountdown();
+        try { this.video.play(); } catch {}
+      });
+    }
+
     // Center Splash Feedback Icon
     this.centerSplash = document.createElement('div');
     this.centerSplash.className = 'stream-center-feedback';
@@ -1219,12 +1302,6 @@ export class PartyPlayer {
     this.controlsOverlay = document.createElement('div');
     this.controlsOverlay.className = 'stream-controls-overlay';
     this.controlsOverlay.innerHTML = `
-      <div class="stream-controls-top">
-        <button class="stream-ctrl-btn stream-lock-btn touch-target" id="btn-player-lock" title="Lock Screen (L)">
-          <span class="stream-lock-icon" id="stream-lock-icon">🔒</span>
-        </button>
-      </div>
-
       <div class="stream-controls-bar">
         <!-- Interactive Progress Scrubber -->
         <div class="stream-progress-wrap" id="stream-progress-bar">
@@ -1301,11 +1378,6 @@ export class PartyPlayer {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </button>
 
-            <!-- Lock Screen Button -->
-            <button class="stream-ctrl-btn stream-lock-btn touch-target" id="btn-player-lock-bottom" title="Lock Screen (L)">
-              <span class="stream-lock-icon stream-lock-icon-bottom">🔒</span>
-            </button>
-
             <!-- PiP -->
             <button class="stream-ctrl-btn" id="btn-player-pip" title="Picture-in-Picture">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><rect x="12" y="9" width="8" height="6" rx="1" ry="1"/></svg>
@@ -1321,17 +1393,16 @@ export class PartyPlayer {
     `;
     this.container.appendChild(this.controlsOverlay);
 
-    // Create Lock Screen Overlay (Fix 5)
-    this.lockOverlay = document.createElement('div');
-    this.lockOverlay.className = 'player-lock-overlay';
-    this.lockOverlay.id = 'player-lock-overlay';
-    this.lockOverlay.innerHTML = `
-      <div class="unlock-hint" id="player-unlock-btn">
-        <span class="unlock-icon" style="margin-right: 6px;">🔓</span>
-        <span>Tap to unlock</span>
-      </div>
-    `;
-    this.container.appendChild(this.lockOverlay);
+    // Create Floating Lock Button — sits OUTSIDE controls overlay so it stays visible when locked
+    this.floatingLockBtn = document.createElement('button');
+    this.floatingLockBtn.className = 'player-lock-floating-btn stream-lock-btn';
+    this.floatingLockBtn.id = 'player-lock-floating-btn';
+    this.floatingLockBtn.title = 'Lock/Unlock Screen';
+    if (typeof this.floatingLockBtn.setAttribute === 'function') {
+      this.floatingLockBtn.setAttribute('title', 'Lock/Unlock Screen');
+    }
+    this.floatingLockBtn.textContent = '🔒';
+    this.container.appendChild(this.floatingLockBtn);
 
     // Bind custom controls
     this._bindCustomControlEvents();
@@ -1356,60 +1427,40 @@ export class PartyPlayer {
     const pipBtn = document.getElementById('btn-player-pip');
     const progressBar = document.getElementById('stream-progress-bar');
 
-    // Lock / Unlock Screen Toggle (Fix 5)
+    // Lock / Unlock Screen Toggle
     this.isPlayerLocked = false;
+    const floatingLockBtn = document.getElementById('player-lock-floating-btn');
     const toggleLock = (forceState) => {
       this.isPlayerLocked = typeof forceState === 'boolean' ? forceState : !this.isPlayerLocked;
-      const topIcon = document.getElementById('stream-lock-icon');
-      const bottomIcon = document.querySelector('.stream-lock-icon-bottom');
-      const icons = [topIcon, bottomIcon].filter(Boolean);
 
       if (this.isPlayerLocked) {
         this.container.classList.add('player-locked');
-        icons.forEach((ic) => {
-          ic.textContent = '🔒';
-          ic.classList.remove('anim-scale');
-          void ic.offsetWidth;
-          ic.classList.add('anim-scale');
-        });
+        if (floatingLockBtn) {
+          floatingLockBtn.textContent = '🔓';
+          floatingLockBtn.classList.remove('lock-anim');
+          void floatingLockBtn.offsetWidth;
+          floatingLockBtn.classList.add('lock-anim');
+        }
       } else {
         this.container.classList.remove('player-locked');
-        icons.forEach((ic) => {
-          ic.textContent = '🔓';
-          ic.classList.remove('anim-scale');
-          void ic.offsetWidth;
-          ic.classList.add('anim-scale');
-          setTimeout(() => {
-            if (!this.isPlayerLocked) ic.textContent = '🔒';
-          }, 1200);
-        });
+        if (floatingLockBtn) {
+          floatingLockBtn.textContent = '🔒';
+          floatingLockBtn.classList.remove('lock-anim');
+          void floatingLockBtn.offsetWidth;
+          floatingLockBtn.classList.add('lock-anim');
+        }
         this.showControlsTemporarily();
       }
     };
 
-    safeOn(document.getElementById('btn-player-lock'), 'click', (e) => {
+    safeOn(floatingLockBtn, 'click', (e) => {
       e?.stopPropagation?.();
-      toggleLock(true);
+      toggleLock();
     });
-    safeOn(document.getElementById('btn-player-lock-bottom'), 'click', (e) => {
+    safeOn(floatingLockBtn, 'touchend', (e) => {
+      e?.preventDefault?.();
       e?.stopPropagation?.();
-      toggleLock(true);
-    });
-    safeOn(document.getElementById('player-unlock-btn'), 'click', (e) => {
-      e?.stopPropagation?.();
-      toggleLock(false);
-    });
-    safeOn(this.lockOverlay, 'click', (e) => {
-      e?.stopPropagation?.();
-      if (e.target.closest('#player-unlock-btn')) {
-        toggleLock(false);
-      } else {
-        const hint = document.getElementById('player-unlock-btn');
-        if (hint) {
-          hint.style.transform = 'scale(1.12)';
-          setTimeout(() => { hint.style.transform = ''; }, 200);
-        }
-      }
+      toggleLock();
     });
 
     // Smart TV Cast Button Click
@@ -1539,7 +1590,6 @@ export class PartyPlayer {
           if (this.controlsOverlay?.classList) {
             this.controlsOverlay.classList.remove('active');
           }
-          if (this.settingsMenu) this.settingsMenu.style.display = 'none';
         }, 3200);
       }
     };
@@ -1551,7 +1601,6 @@ export class PartyPlayer {
         if (this.controlsOverlay?.classList) {
           this.controlsOverlay.classList.remove('active');
         }
-        if (this.settingsMenu) this.settingsMenu.style.display = 'none';
       }
     });
 
@@ -1585,7 +1634,6 @@ export class PartyPlayer {
         this._tapTimeout = setTimeout(() => {
           if (this.controlsOverlay?.classList.contains('active')) {
             this.controlsOverlay.classList.remove('active');
-            if (this.settingsMenu) this.settingsMenu.style.display = 'none';
             clearTimeout(this.controlsTimeout);
           } else {
             resetControlsTimer();
@@ -1955,13 +2003,7 @@ export class PartyPlayer {
       </div>
     `;
     
-    // Append to document.body so modal escapes any video container clipping
-    if (typeof document?.body?.appendChild === 'function') {
-      document.body.appendChild(this.settingsMenu);
-    } else if (typeof this.container?.appendChild === 'function') {
-      this.container.appendChild(this.settingsMenu);
-    }
-
+    // Create Backdrop first so it stays behind settingsMenu
     if (typeof document?.createElement === 'function') {
       this.settingsBackdrop = document.createElement('div');
       this.settingsBackdrop.className = 'streamo-settings-backdrop';
@@ -1973,6 +2015,13 @@ export class PartyPlayer {
           this.toggleSettingsMenu(false);
         });
       }
+    }
+
+    // Append settingsMenu after backdrop so it sits on top in DOM order as well as z-index
+    if (typeof document?.body?.appendChild === 'function') {
+      document.body.appendChild(this.settingsMenu);
+    } else if (typeof this.container?.appendChild === 'function') {
+      this.container.appendChild(this.settingsMenu);
     }
 
     const closeBtn = document.getElementById?.('btn-close-settings-sheet');
@@ -2035,12 +2084,16 @@ export class PartyPlayer {
     });
 
     // Submenu Triggers
-    safeOn(document.getElementById('card-stat-quality'), 'click', () => {
+    safeOn(document.getElementById('card-stat-quality'), 'click', (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
       hideAllViews();
       if (viewQuality) viewQuality.style.display = 'block';
       this._renderQualitySubmenu();
     });
-    safeOn(document.getElementById('card-stat-source'), 'click', () => {
+    safeOn(document.getElementById('card-stat-source'), 'click', (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
       hideAllViews();
       if (viewSource) viewSource.style.display = 'block';
       this._renderSourceSubmenu();
@@ -2216,11 +2269,13 @@ export class PartyPlayer {
       this.settingsMenu.style.display = 'flex';
       this._positionSettingsMenu();
 
-      if (window.innerWidth <= 640 && this.settingsBackdrop) {
+      if (window.innerWidth <= 768 && this.settingsBackdrop) {
         this.settingsBackdrop.style.display = 'block';
+        this.settingsBackdrop.style.zIndex = '450';
       } else if (this.settingsBackdrop) {
         this.settingsBackdrop.style.display = 'none';
       }
+      this.settingsMenu.style.zIndex = '500';
 
       if (tabName === 'subtitles') {
         document.getElementById('tab-subtitles-btn')?.click();
@@ -2238,7 +2293,7 @@ export class PartyPlayer {
 
   _positionSettingsMenu() {
     if (!this.settingsMenu) return;
-    if (window.innerWidth <= 640) {
+    if (window.innerWidth <= 768) {
       this.settingsMenu.style.position = 'fixed';
       this.settingsMenu.style.bottom = '0px';
       this.settingsMenu.style.left = '0px';
@@ -2247,6 +2302,7 @@ export class PartyPlayer {
       this.settingsMenu.style.width = '100vw';
       this.settingsMenu.style.maxWidth = '100vw';
       this.settingsMenu.style.borderRadius = '20px 20px 0 0';
+      this.settingsMenu.style.zIndex = '500';
     } else {
       const rect = this.container.getBoundingClientRect();
       this.settingsMenu.style.position = 'fixed';
@@ -2264,6 +2320,7 @@ export class PartyPlayer {
     const listEl = document.getElementById('settings-quality-list');
     if (!listEl) return;
     listEl.innerHTML = '';
+    const renderTime = Date.now();
 
     const safeOn = (el, evt, fn) => {
       if (el && typeof el.addEventListener === 'function') {
@@ -2291,7 +2348,11 @@ export class PartyPlayer {
         ${isSelected ? '<span>✓</span>' : ''}
       `;
 
-      safeOn(item, 'click', async () => {
+      safeOn(item, 'click', async (e) => {
+        // Prevent iOS Safari synthetic ghost clicks right after menu transition
+        if (Date.now() - renderTime < 350) return;
+        e?.stopPropagation?.();
+
         const selectedQ = q === 'Auto' ? null : q;
         this.preferredQuality = selectedQ;
         const statQ = document.getElementById('stat-val-quality');
@@ -2300,6 +2361,8 @@ export class PartyPlayer {
         if (pillQ) pillQ.textContent = q;
 
         this.settingsMenu.style.display = 'none';
+        if (this.settingsBackdrop) this.settingsBackdrop.style.display = 'none';
+
         const curSec = this.video.currentTime || 0;
         await this.loadStream({
           ...this.currentVideo,
@@ -2317,6 +2380,7 @@ export class PartyPlayer {
     const listEl = document.getElementById('settings-source-list');
     if (!listEl) return;
     listEl.innerHTML = '';
+    const renderTime = Date.now();
 
     const safeOn = (el, evt, fn) => {
       if (el && typeof el.addEventListener === 'function') {
@@ -2348,13 +2412,19 @@ export class PartyPlayer {
         ${isSelected ? '<span>✓</span>' : ''}
       `;
 
-      safeOn(item, 'click', async () => {
+      safeOn(item, 'click', async (e) => {
+        // Prevent iOS Safari synthetic ghost clicks right after menu transition
+        if (Date.now() - renderTime < 350) return;
+        e?.stopPropagation?.();
+
         this.currentProvider = p.name;
         this.preferredProvider = p.name;
         const statP = document.getElementById('stat-val-source');
         if (statP) statP.textContent = p.name;
 
         this.settingsMenu.style.display = 'none';
+        if (this.settingsBackdrop) this.settingsBackdrop.style.display = 'none';
+
         const curSec = this.video.currentTime || 0;
         await this.loadStream({
           ...this.currentVideo,
@@ -2441,9 +2511,11 @@ export class PartyPlayer {
 
       const epBtn = document.getElementById('btn-player-episodes');
       if (epBtn) {
-        epBtn.style.display = isTv ? 'inline-flex' : 'none';
         if (isTv) {
+          epBtn.style.setProperty('display', 'inline-flex', 'important');
           epBtn.title = `Switch Season/Episode (Current: S${String(partyPayload.video.season || 1).padStart(2, '0')}E${String(partyPayload.video.episode || 1).padStart(2, '0')})`;
+        } else {
+          epBtn.style.setProperty('display', 'none', 'important');
         }
       }
       if (isTv && newTmdbId) {
@@ -2675,7 +2747,12 @@ export class PartyPlayer {
         <div style="text-align: center; color: #94a3b8; padding: 30px;">Loading episodes...</div>
       </div>
     `;
-    this.container.appendChild(this.episodesDrawer);
+    // Append to document.body so the drawer is NEVER clipped by video container overflow
+    if (typeof document?.body?.appendChild === 'function') {
+      document.body.appendChild(this.episodesDrawer);
+    } else {
+      this.container.appendChild(this.episodesDrawer);
+    }
 
     const safeOn = (el, evt, fn) => {
       if (el && typeof el.addEventListener === 'function') {
@@ -2684,8 +2761,18 @@ export class PartyPlayer {
     };
 
     safeOn(document.getElementById('btn-close-ep-drawer'), 'click', () => {
-      this.episodesDrawer.classList.remove('open');
+      this.toggleEpisodesDrawer();
     });
+
+    if (typeof document?.createElement === 'function') {
+      this.episodesBackdrop = document.createElement('div');
+      this.episodesBackdrop.className = 'stream-episodes-backdrop';
+      this.episodesBackdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:999998;display:none;-webkit-tap-highlight-color:transparent;';
+      if (document.body) document.body.appendChild(this.episodesBackdrop);
+      safeOn(this.episodesBackdrop, 'click', () => {
+        this.toggleEpisodesDrawer();
+      });
+    }
 
     safeOn(document.getElementById('stream-ep-season-select'), 'change', (e) => {
       const sNum = Number(e.target.value);
@@ -2730,10 +2817,20 @@ export class PartyPlayer {
       } catch (err) {
         console.warn('[PartyPlayer] Failed fetching series seasons:', err);
         if (listEl) {
-          listEl.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 24px;">Failed to load episodes. <button id="btn-retry-load-episodes" style="margin-top: 10px; background: #4f46e5; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: block; margin-left: auto; margin-right: auto;">Retry</button></div>`;
-          document.getElementById('btn-retry-load-episodes')?.addEventListener('click', () => {
-            this._loadingSeriesPromise = null;
-            this._loadSeriesSeasonsForDrawer(numId);
+          const currentTitle = this.currentVideo?.title || 'Current Title';
+          listEl.innerHTML = `
+            <div style="text-align: center; color: #94a3b8; padding: 36px 16px;">
+              <div style="font-size: 34px; margin-bottom: 12px;">🎬</div>
+              <div style="font-weight: 700; color: #fff; font-size: 15px; margin-bottom: 6px;">${escapeHtml(currentTitle)}</div>
+              <div style="font-size: 13px; line-height: 1.5; color: #94a3b8; margin-bottom: 20px;">This title is a standalone movie (no TV episodes or seasons).</div>
+              <button id="btn-drawer-browse-shows" style="background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 13px; box-shadow: 0 4px 15px rgba(99,102,241,0.4);">Browse TV Shows & Anime ↗</button>
+            </div>
+          `;
+          document.getElementById('btn-drawer-browse-shows')?.addEventListener('click', () => {
+            this.toggleEpisodesDrawer();
+            if (typeof window.toggleMovieBrowser === 'function') {
+              window.toggleMovieBrowser(true);
+            }
           });
         }
       } finally {
@@ -2815,6 +2912,7 @@ export class PartyPlayer {
         const epData = curSeason.episodes.find((e) => Number(e.episodeNumber) === epNum);
 
         this.episodesDrawer.classList.remove('open');
+        if (this.episodesBackdrop) this.episodesBackdrop.style.display = 'none';
 
         const seriesTitle = this.currentSeriesDetails?.title || this.currentVideo?.seriesTitle || 'TV Series';
         const formattedTitle = `${seriesTitle} - S${String(epSeason).padStart(2, '0')}E${String(epNum).padStart(2, '0')}${epData ? ' - ' + epData.name : ''}`;
@@ -2837,15 +2935,54 @@ export class PartyPlayer {
     const isOpen = this.episodesDrawer.classList.contains('open');
     if (isOpen) {
       this.episodesDrawer.classList.remove('open');
+      if (this.episodesBackdrop) this.episodesBackdrop.style.display = 'none';
     } else {
       this.episodesDrawer.classList.add('open');
+      if (this.episodesBackdrop) this.episodesBackdrop.style.display = 'block';
       const targetTmdbId = this.currentVideo?.tmdbId;
-      if (targetTmdbId && (!this.currentSeriesDetails || Number(this.currentSeriesDetails.tmdbId) !== Number(targetTmdbId))) {
+      if (this.currentVideo?.type === 'movie') {
+        const listEl = document.getElementById('stream-ep-list');
+        if (listEl) {
+          const currentTitle = this.currentVideo?.title || 'Current Title';
+          listEl.innerHTML = `
+            <div style="text-align: center; color: #94a3b8; padding: 36px 16px;">
+              <div style="font-size: 34px; margin-bottom: 12px;">🎬</div>
+              <div style="font-weight: 700; color: #fff; font-size: 15px; margin-bottom: 6px;">${escapeHtml(currentTitle)}</div>
+              <div style="font-size: 13px; line-height: 1.5; color: #94a3b8; margin-bottom: 20px;">This title is a standalone movie (no TV episodes or seasons).</div>
+              <button id="btn-drawer-browse-shows" style="background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 13px; box-shadow: 0 4px 15px rgba(99,102,241,0.4);">Browse TV Shows & Anime ↗</button>
+            </div>
+          `;
+          document.getElementById('btn-drawer-browse-shows')?.addEventListener('click', () => {
+            this.toggleEpisodesDrawer();
+            if (typeof window.toggleMovieBrowser === 'function') {
+              window.toggleMovieBrowser(true);
+            }
+          });
+        }
+      } else if (targetTmdbId && (!this.currentSeriesDetails || Number(this.currentSeriesDetails.tmdbId) !== Number(targetTmdbId))) {
         this._loadSeriesSeasonsForDrawer(targetTmdbId);
       } else if (this.currentSeriesDetails?.seasons?.length) {
         this._populateSeasonDropdown(this.currentSeriesDetails.seasons);
       } else if (targetTmdbId) {
         this._loadSeriesSeasonsForDrawer(targetTmdbId);
+      } else {
+        const listEl = document.getElementById('stream-ep-list');
+        if (listEl) {
+          listEl.innerHTML = `
+            <div style="text-align: center; color: #94a3b8; padding: 36px 16px;">
+              <div style="font-size: 34px; margin-bottom: 12px;">📺</div>
+              <div style="font-weight: 700; color: #fff; font-size: 15px; margin-bottom: 6px;">No TV Series Selected</div>
+              <div style="font-size: 13px; line-height: 1.5; color: #94a3b8; margin-bottom: 20px;">Pick a TV series from the catalog to browse and watch episodes together.</div>
+              <button id="btn-drawer-browse-shows" style="background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 13px; box-shadow: 0 4px 15px rgba(99,102,241,0.4);">Browse TV Shows & Anime ↗</button>
+            </div>
+          `;
+          document.getElementById('btn-drawer-browse-shows')?.addEventListener('click', () => {
+            this.toggleEpisodesDrawer();
+            if (typeof window.toggleMovieBrowser === 'function') {
+              window.toggleMovieBrowser(true);
+            }
+          });
+        }
       }
     }
   }
@@ -2854,6 +2991,14 @@ export class PartyPlayer {
     if (this.febboxModal) {
       this.febboxModal.style.display = 'flex';
       if (this.settingsMenu) this.settingsMenu.style.display = 'none';
+    }
+  }
+
+  showToast(msg, type = 'info') {
+    if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+      window.showToast(msg, type);
+    } else {
+      console.log(`[Toast] [${type}] ${msg}`);
     }
   }
 
@@ -2899,9 +3044,24 @@ export class PartyPlayer {
     }
     const numEl = document.getElementById('party-countdown-num');
 
+    // Dismiss early if video already starts playing or receives frames
+    let videoAlreadyPlaying = false;
+    const onPlayingEarly = () => {
+      videoAlreadyPlaying = true;
+      this.hideCountdown();
+    };
+    if (typeof this.video?.addEventListener === 'function') {
+      this.video.addEventListener('playing', onPlayingEarly, { once: true });
+    }
+
     for (let i = seconds; i > 0; i--) {
+      if (videoAlreadyPlaying) break;
       if (numEl) numEl.textContent = i;
-      await new Promise((r) => setTimeout(r, 750));
+      await new Promise((r) => setTimeout(r, 650));
+    }
+
+    if (typeof this.video?.removeEventListener === 'function') {
+      this.video.removeEventListener('playing', onPlayingEarly);
     }
 
     this.hideCountdown();
@@ -3046,12 +3206,20 @@ export class PartyPlayer {
 
       // Update Episodes button visibility
       const episodesBtn = document.getElementById('btn-player-episodes');
-      if (episodesBtn) {
+      if (episodesBtn && episodesBtn.style) {
         if (type === 'tv') {
-          episodesBtn.style.display = 'inline-flex';
+          if (typeof episodesBtn.style.setProperty === 'function') {
+            episodesBtn.style.setProperty('display', 'inline-flex', 'important');
+          } else {
+            episodesBtn.style.display = 'inline-flex';
+          }
           episodesBtn.title = `Switch Season/Episode (Current: S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')})`;
         } else {
-          episodesBtn.style.display = 'none';
+          if (typeof episodesBtn.style.setProperty === 'function') {
+            episodesBtn.style.setProperty('display', 'none', 'important');
+          } else {
+            episodesBtn.style.display = 'none';
+          }
         }
       }
 
@@ -3074,27 +3242,31 @@ export class PartyPlayer {
         this._loadSeriesSeasonsForDrawer(tmdbId);
       }
 
-      // Step 2: Fetch subtitles catalog
+      // Step 2: Fetch subtitles catalog non-blocking (parallel with stream setup)
       let proxiedSubtitleUrl = null;
-      try {
-        const subRes = await fetch(
-          `/api/media/subtitles?tmdbId=${tmdbId}&type=${type}&language=English&season=${season}&episode=${episode}`
-        );
-        if (subRes.ok) {
-          const subData = await subRes.json();
-          proxiedSubtitleUrl = subData.url;
-          this.subtitleTracks = subData.tracks || [];
-          if (window.onSubtitlesLoaded) {
-            window.onSubtitlesLoaded(this.subtitleTracks, proxiedSubtitleUrl);
+      const subPromise = fetch(
+        `/api/media/subtitles?tmdbId=${tmdbId}&type=${type}&language=English&season=${season}&episode=${episode}`
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .then((subData) => {
+          if (subData) {
+            proxiedSubtitleUrl = subData.url;
+            this.subtitleTracks = subData.tracks || [];
+            if (window.onSubtitlesLoaded) {
+              window.onSubtitlesLoaded(this.subtitleTracks, proxiedSubtitleUrl);
+            }
+            this._renderSubtitlesList();
+            if (proxiedSubtitleUrl) {
+              this.setSubtitleTrack(proxiedSubtitleUrl);
+            }
           }
-          this._renderSubtitlesList();
-        }
-      } catch (err) {
-        console.warn('[PartyPlayer] Subtitles fetch non-fatal error:', err);
-      }
+        })
+        .catch((err) => {
+          console.warn('[PartyPlayer] Subtitles background load non-fatal:', err);
+        });
 
-      // Step 3: Attach video & subtitles locally
-      await this.attachStream(streamUrl, proxiedSubtitleUrl);
+      // Step 3: Attach video locally immediately (no waiting 5+ seconds for subtitles)
+      await this.attachStream(streamUrl, null);
 
       // Step 4: Broadcast WebSocket party state
       const ntpNow = this.getNtpNow();
@@ -3217,7 +3389,11 @@ export class PartyPlayer {
     } catch (err) {
       this.hideLoading();
       this.hideCountdown();
-      alert(`Could not load stream: ${err.message}`);
+      if (typeof alert === 'function') {
+        alert(`Could not load stream: ${err.message}`);
+      } else {
+        console.error(`Could not load stream: ${err.message}`);
+      }
       throw err;
     }
   }
@@ -3421,6 +3597,7 @@ export class PartyPlayer {
 
   /**
    * Attaches video stream URL (HLS .m3u8 or MP4)
+   * Guaranteed cross-browser sequence for Android, iOS, and Desktop
    */
   async attachStream(url, subtitlesUrl = null) {
     if (!url) return;
@@ -3431,9 +3608,24 @@ export class PartyPlayer {
       this.hls = null;
     }
 
-    const isHls = url.includes('.m3u8') || url.includes('/hls') || url.includes('type=hls');
+    const isAppleNative = this.video?.canPlayType && this.video.canPlayType('application/vnd.apple.mpegurl') !== '';
+    const isHls = url.includes('.m3u8') || url.includes('/hls') || url.includes('type=hls') || url.includes('/proxy');
 
-    if (isHls && window.Hls && window.Hls.isSupported()) {
+    const isNodeEnv = typeof window === 'undefined' || typeof document === 'undefined';
+    if (isHls && !isAppleNative && !isNodeEnv) {
+      // Guaranteed loading state for Android / Chrome mobile browsers
+      this.showLoading('Loading video engine...', 'Initializing high-performance playback engine for Android / Chrome...');
+
+      const hlsReady = await ensureHlsLoaded();
+      if (!hlsReady || !window.Hls || typeof window.Hls.isSupported !== 'function' || !window.Hls.isSupported()) {
+        console.error('[PartyPlayer] Video player failed to load HLS engine');
+        this.showToast('Video player failed to load. Please refresh the page.', 'error');
+        this.hideLoading();
+        this.video.src = url;
+        if (subtitlesUrl) this.setSubtitleTrack(subtitlesUrl);
+        return;
+      }
+
       return new Promise((resolve) => {
         let settled = false;
         const finish = () => {
@@ -3450,34 +3642,46 @@ export class PartyPlayer {
           finish();
         }, 4500);
 
-        this.hls = new window.Hls({
+        const hls = new window.Hls({
           enableWorker: true,
           lowLatencyMode: false,
           backBufferLength: 90,
           maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+          startLevel: -1,        // auto quality selection
+          abrEwmaDefaultEstimate: 500000,  // start with 500kbps estimate for mobile
         });
 
-        this.hls.loadSource(url);
-        this.hls.attachMedia(this.video);
+        this.hls = hls;
+        window._hlsInstance = hls;
 
-        this.hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+        hls.loadSource(url);
+        hls.attachMedia(this.video);
+
+        hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
           this.isHlsManifestLoaded = true;
           this._populateAudioTracks(this.hls.audioTracks);
           if (subtitlesUrl) {
             this.setSubtitleTrack(subtitlesUrl);
           }
-          // Root cause C fix: Force seek to desiredPosition explicitly before starting playback
-          this.syncToPosition(this.getDesiredPositionMs());
+          // CRITICAL: seek to sync position BEFORE playing, not after
+          const desiredPosMs = this.getDesiredPositionMs();
+          if (desiredPosMs > 500) {
+            this.video.currentTime = desiredPosMs / 1000;
+          }
+          this.syncToPosition(desiredPosMs);
           this.startDriftLoop();
+          this.hideLoading();
+          this.video.play().catch(() => this._showPlayPrompt());
           finish();
         });
 
-        this.hls.on(window.Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
+        hls.on(window.Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
           this._populateAudioTracks(data.audioTracks);
         });
 
         let errorRetries = 0;
-        this.hls.on(window.Hls.Events.ERROR, (event, data) => {
+        hls.on(window.Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
             console.warn('[Hls] Fatal error encountered:', data.type, data.details);
             errorRetries++;
@@ -3492,7 +3696,7 @@ export class PartyPlayer {
 
             if (isUnrecoverable) {
               console.warn('[Hls] Fatal stream failure, auto-failing over to alternative provider...');
-              this.hls.destroy();
+              hls.destroy();
               if (this.availableProviders?.length > 1 && this.currentVideo?.tmdbId && !this._isSwitchingProvider) {
                 this._isSwitchingProvider = true;
                 const otherProviders = this.availableProviders.filter(p => p.name !== this.currentProvider);
@@ -3515,14 +3719,15 @@ export class PartyPlayer {
             switch (data.type) {
               case window.Hls.ErrorTypes.NETWORK_ERROR:
                 console.warn('[Hls] Fatal network error encountered, attempting recovery...');
-                this.hls.startLoad();
+                hls.startLoad();
                 break;
               case window.Hls.ErrorTypes.MEDIA_ERROR:
                 console.warn('[Hls] Fatal media error encountered, recovering media...');
-                this.hls.recoverMediaError();
+                hls.recoverMediaError();
                 break;
               default:
-                this.hls.destroy();
+                hls.destroy();
+                this.showToast('Stream failed to load. Try refreshing or choosing a different quality.', 'error');
                 finish();
                 break;
             }
@@ -3530,14 +3735,21 @@ export class PartyPlayer {
         });
       });
     } else {
+      // iOS native or direct MP4
       this.video.src = url;
       if (subtitlesUrl) {
         this.setSubtitleTrack(subtitlesUrl);
       }
+      this.video.load();
+      const desiredPosMs = this.getDesiredPositionMs();
+      if (desiredPosMs > 500) {
+        this.video.currentTime = desiredPosMs / 1000;
+      }
       const onNativeReady = () => {
         this.isHlsManifestLoaded = true;
-        // Root cause C fix: Force seek to desiredPosition explicitly on native canplay/loadedmetadata
         this.syncToPosition(this.getDesiredPositionMs());
+        this.hideLoading();
+        this.video.play().catch(() => this._showPlayPrompt());
         if (typeof this.video.removeEventListener === 'function') {
           this.video.removeEventListener('loadedmetadata', onNativeReady);
           this.video.removeEventListener('canplay', onNativeReady);
@@ -3549,6 +3761,8 @@ export class PartyPlayer {
       } else {
         this.isHlsManifestLoaded = true;
         this.syncToPosition(this.getDesiredPositionMs());
+        this.hideLoading();
+        this.video.play().catch(() => this._showPlayPrompt());
       }
       this.startDriftLoop();
       return Promise.resolve();
@@ -3641,19 +3855,26 @@ export class PartyPlayer {
   startDriftLoop() {
     if (this.isDriftRunning) return;
     this.isDriftRunning = true;
+    this.lastCorrectionTime = 0;
 
-    const loop = (timestamp) => {
+    const driftLoop = (timestamp) => {
       if (!this.isDriftRunning) return;
 
-      if (timestamp - this.lastDriftCheck >= 1000) {
-        this.lastDriftCheck = timestamp;
-        this.checkDrift();
+      if (!this.lastCorrectionTime || (timestamp - this.lastCorrectionTime >= this.CORRECTION_INTERVAL)) {
+        this.lastCorrectionTime = timestamp;
+        this.correctDrift();
       }
 
-      this.driftRafId = requestAnimationFrame(loop);
+      this.driftRafId = requestAnimationFrame(driftLoop);
+      if (typeof window !== 'undefined') {
+        window._driftLoopRAF = this.driftRafId;
+      }
     };
 
-    this.driftRafId = requestAnimationFrame(loop);
+    this.driftRafId = requestAnimationFrame(driftLoop);
+    if (typeof window !== 'undefined') {
+      window._driftLoopRAF = this.driftRafId;
+    }
   }
 
   stopDriftLoop() {
@@ -3662,15 +3883,22 @@ export class PartyPlayer {
       cancelAnimationFrame(this.driftRafId);
       this.driftRafId = null;
     }
+    if (typeof window !== 'undefined' && window._driftLoopRAF) {
+      cancelAnimationFrame(window._driftLoopRAF);
+      window._driftLoopRAF = null;
+    }
   }
 
-  checkDrift() {
-    // Only check and correct drift when media is active and ready
-    if (this.isRemoteSync.current || !this.syncState || !this.isHlsManifestLoaded || this.video.readyState < 2) return;
+  correctDrift() {
+    if (this.seekInProgress) {
+      this._updateDebugHud(this.lastDriftMs || 0, 'WAITING_FOR_SEEK', this.video.playbackRate);
+      return;
+    }
+
+    if (this.isRemoteSync.current) return;
+    if (!this.syncState) return;
 
     const dur = this.video.duration;
-    if (!dur || isNaN(dur) || !isFinite(dur) || dur <= 0) return;
-
     const ntpNow = this.getNtpNow();
     const isPaused = this.syncState.status === 'PAUS' || this.syncState.paused !== null;
 
@@ -3683,30 +3911,132 @@ export class PartyPlayer {
     }
 
     const currentMs = Math.round(this.video.currentTime * 1000);
-    const action = getDriftAction(currentMs, targetMs, isPaused);
+    const driftMs = targetMs - currentMs;
+    this.lastDriftMs = driftMs;
 
-    // Update debug drift HUD if debug mode is active (?debug=1)
-    if (this.isDebugMode) {
-      const wrapEl = document.getElementById('hud-debug-wrap');
-      const driftEl = document.getElementById('hud-debug-drift');
-      const zoneEl = document.getElementById('hud-debug-zone');
-      if (wrapEl) wrapEl.style.display = 'inline-flex';
-      if (driftEl) driftEl.textContent = `${action.deltaMs > 0 ? '+' : ''}${action.deltaMs}ms`;
-      if (zoneEl) zoneEl.textContent = action.zone || 'ZONE 0';
+    // Check buffer readiness (Failure 2 fix: prevent accumulation window on mobile buffering)
+    if (!this.video.readyState || this.video.readyState < 3) {
+      this._updateDebugHud(driftMs, 'WAITING_FOR_BUFFER', this.video.playbackRate);
+      this._handleSyncRecoveryBanner(driftMs);
+      return;
     }
 
-    const now = Date.now();
-    const isSeekingCooldown = (now - (this.lastSeekTime || 0)) < 1000;
-
-    if (action.type === 'seek' && !isSeekingCooldown) {
-      this.lastSeekTime = now;
-      const safeTarget = Math.max(0, Math.min(action.targetSec, Math.max(0, dur - 1)));
-      if (Math.abs(this.video.currentTime - safeTarget) > 0.5) {
-        this.video.currentTime = safeTarget;
+    // 5 Discrete Zones:
+    if (Math.abs(driftMs) > 3000) {
+      this._updateDebugHud(driftMs, 'SEEKING', this.video.playbackRate);
+      this.seekInProgress = true;
+      const safeTarget = Math.max(0, dur ? Math.min(targetMs / 1000, Math.max(0, dur - 0.5)) : targetMs / 1000);
+      this.video.currentTime = safeTarget;
+    } else if (Math.abs(driftMs) > 150) {
+      const rate = driftMs > 0 ? 1.05 : 0.95;
+      this._updateDebugHud(driftMs, 'SLEWING', rate);
+      if (!isPaused) {
+        this.video.playbackRate = rate;
+      } else {
+        this.video.playbackRate = 1.0;
       }
-    } else if (action.type === 'rate') {
-      this.video.playbackRate = action.rate;
+    } else {
+      this._updateDebugHud(driftMs, 'DEADBAND', 1.0);
+      if (this.video.playbackRate !== 1.0) {
+        this.video.playbackRate = 1.0;
+      }
     }
+
+    this._handleSyncRecoveryBanner(driftMs);
+  }
+
+  checkDrift() {
+    return this.correctDrift();
+  }
+
+  _updateDebugHud(driftMs, zone, rate) {
+    const driftText = `${driftMs > 0 ? '+' : ''}${driftMs}ms`;
+    const rateText = `${Number(rate || this.video?.playbackRate || 1.0).toFixed(2)}x`;
+
+    const hudDrift = document.getElementById('hud-drift');
+    const hudRate = document.getElementById('hud-rate');
+    const hudPill = document.getElementById('hud-pill');
+    const hudStateText = document.getElementById('hud-state-text');
+
+    if (hudDrift) hudDrift.textContent = driftText;
+    if (hudRate) hudRate.textContent = rateText;
+
+    if (hudPill && hudStateText) {
+      if (hudPill.classList?.remove) {
+        hudPill.classList.remove('in_sync', 'slewing', 'seeking');
+        if (zone === 'DEADBAND') {
+          hudPill.classList.add('in_sync');
+        } else if (zone === 'SLEWING') {
+          hudPill.classList.add('slewing');
+        } else if (zone === 'SEEKING') {
+          hudPill.classList.add('seeking');
+        } else if (zone === 'WAITING_FOR_SEEK') {
+          hudPill.classList.add('seeking');
+        } else if (zone === 'WAITING_FOR_BUFFER') {
+          hudPill.classList.add('slewing');
+        }
+      }
+      if (zone === 'DEADBAND') {
+        hudStateText.textContent = 'IN SYNC';
+      } else if (zone === 'SLEWING') {
+        hudStateText.textContent = 'SLEWING';
+      } else if (zone === 'SEEKING') {
+        hudStateText.textContent = 'HARD SYNC';
+      } else if (zone === 'WAITING_FOR_SEEK') {
+        hudStateText.textContent = 'SEEKING';
+      } else if (zone === 'WAITING_FOR_BUFFER') {
+        hudStateText.textContent = 'BUFFERING';
+      }
+    }
+
+    const wrapEl = document.getElementById('hud-debug-wrap');
+    const driftEl = document.getElementById('hud-debug-drift');
+    const zoneEl = document.getElementById('hud-debug-zone');
+    const debugRateEl = document.getElementById('hud-debug-rate');
+    if (wrapEl && this.isDebugMode) wrapEl.style.display = 'inline-flex';
+    if (driftEl) driftEl.textContent = driftText;
+    if (zoneEl) zoneEl.textContent = zone;
+    if (debugRateEl) debugRateEl.textContent = rateText;
+  }
+
+  _handleSyncRecoveryBanner(driftMs) {
+    if (typeof document === 'undefined') return;
+    const banner = document.getElementById('sync-recovery-banner');
+    if (Math.abs(driftMs) > 5000) {
+      if (!this.highDriftSince) {
+        this.highDriftSince = Date.now();
+      } else if (Date.now() - this.highDriftSince >= 10000) {
+        if (banner) banner.style.display = 'flex';
+      }
+    } else {
+      this.highDriftSince = null;
+      if (banner) banner.style.display = 'none';
+    }
+  }
+
+  async forceResync() {
+    console.log('[SyncRecovery] User triggered manual re-sync');
+    this.showToast('Recalibrating NTP clock & re-syncing...', 'info');
+    if (typeof window !== 'undefined' && typeof window.calibrateNTP === 'function') {
+      await window.calibrateNTP();
+    }
+    const ntpNow = this.getNtpNow();
+    let targetMs = 0;
+    if (this.syncState.status === 'PAUS' || this.syncState.paused !== null) {
+      targetMs = this.syncState.paused ?? this.syncState.position ?? 0;
+    } else {
+      const elapsed = Math.max(0, ntpNow - (this.syncState.started || ntpNow));
+      targetMs = Math.round(elapsed * (this.syncState.rate ?? 1.0));
+    }
+    this.seekInProgress = true;
+    this.video.currentTime = targetMs / 1000;
+    this.highDriftSince = null;
+    if (typeof document !== 'undefined') {
+      const banner = document.getElementById('sync-recovery-banner');
+      if (banner) banner.style.display = 'none';
+    }
+    this._updateDebugHud(0, 'SEEKING', 1.0);
+    this.correctDrift();
   }
 
   _bindVideoEvents() {
@@ -3773,8 +4103,18 @@ export class PartyPlayer {
       });
     });
 
+    // Event-based seeking/seeked guards (Failure 3 fix)
+    this.video.addEventListener('seeking', () => {
+      this.seekInProgress = true;
+      this._updateDebugHud(this.lastDriftMs || 0, 'WAITING_FOR_SEEK', this.video.playbackRate);
+    });
+
     // onSeeked
     this.video.addEventListener('seeked', () => {
+      this.seekInProgress = false;
+      setTimeout(() => {
+        this.correctDrift();
+      }, 100);
       if (this.isRemoteSync.current || Date.now() < this.ignoreEventsUntil) return;
       const ntpNow = this.getNtpNow();
       const currentMs = Math.round(this.video.currentTime * 1000);
@@ -3836,7 +4176,10 @@ export class PartyPlayer {
     if (this.loadingOverlay) this.loadingOverlay.remove();
     if (this.countdownOverlay) this.countdownOverlay.remove();
     if (this.controlsOverlay) this.controlsOverlay.remove();
-    if (this.lockOverlay) this.lockOverlay.remove();
+    if (this.floatingLockBtn) this.floatingLockBtn.remove();
+    if (this.episodesDrawer) this.episodesDrawer.remove();
+    if (this.episodesBackdrop) this.episodesBackdrop.remove();
+    if (this.settingsBackdrop) this.settingsBackdrop.remove();
     if (this.settingsMenu) this.settingsMenu.remove();
     if (this.febboxModal) this.febboxModal.remove();
   }

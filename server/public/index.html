@@ -16,6 +16,7 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
   <script>
+    // @ts-nocheck
     function setVH() {
       document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
     }
@@ -24,7 +25,7 @@
     setVH();
   </script>
   <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js'"></script>
   <script src="https://cdn.jsdelivr.net/npm/emoji-mart@5.6.0/dist/browser.js"></script>
   <style>
     :root {
@@ -158,6 +159,7 @@
       letter-spacing: -0.02em;
       background: linear-gradient(to right, #fff, #cbd5e1);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
@@ -234,6 +236,7 @@
     .hero-title span {
       background: linear-gradient(135deg, #818cf8, #c084fc);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
@@ -535,8 +538,6 @@
       border-radius: 9999px;
       text-transform: uppercase;
     }
-      text-transform: uppercase;
-    }
 
     .sync-state-pill.in_sync {
       background: rgba(34, 197, 94, 0.15);
@@ -560,6 +561,55 @@
       color: var(--text-muted);
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
+    }
+
+    .sync-recovery-banner {
+      position: absolute;
+      top: 54px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.94);
+      border: 1px solid rgba(245, 158, 11, 0.7);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.25);
+      border-radius: 9999px;
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .sync-recovery-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fbbf24;
+    }
+
+    .sync-recovery-btn {
+      background: #f59e0b;
+      color: #000;
+      font-weight: 800;
+      font-size: 12px;
+      border: none;
+      border-radius: 9999px;
+      padding: 6px 14px;
+      cursor: pointer;
+      min-height: 36px;
+      min-width: 90px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .sync-recovery-btn:hover {
+      background: #fbbf24;
+      transform: scale(1.04);
     }
 
     .hud-stat strong {
@@ -683,6 +733,10 @@
       border-radius: 10px;
       cursor: pointer;
       transition: all 0.15s;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(99, 102, 241, 0.2);
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .room-badge:hover {
@@ -912,28 +966,52 @@
       border-color: var(--accent-primary);
     }
 
-    /* Toast */
+    /* Toast — Positioned at top to avoid mobile navigation bars */
     .toast {
       position: fixed;
-      bottom: 24px;
+      top: calc(18px + var(--safe-top, 0px));
       left: 50%;
-      transform: translateX(-50%) translateY(40px);
-      background: rgba(16, 185, 129, 0.95);
+      transform: translateX(-50%) translateY(-50px);
+      background: #10b981;
       color: #fff;
-      padding: 10px 20px;
+      padding: 10px 22px;
       border-radius: 9999px;
       font-size: 13px;
       font-weight: 700;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
       opacity: 0;
       pointer-events: none;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      z-index: 999;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 999999 !important;
     }
 
     .toast.show {
       transform: translateX(-50%) translateY(0);
       opacity: 1;
+    }
+
+    /* Native Share Trigger Button */
+    .share-trigger-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25));
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .share-trigger-btn:hover, .share-trigger-btn:active {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.4));
+      border-color: #c084fc;
+      transform: scale(0.97);
     }
 
     /* Slide-in Movie Browser Drawer */
@@ -967,6 +1045,7 @@
       padding: 16px 20px;
       background: #141414;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
     }
 
     .drawer-title {
@@ -997,7 +1076,10 @@
 
     #movie-browser-container {
       flex: 1;
-      overflow-y: auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     /* Host Browsing Overlay for Guests */
@@ -1322,8 +1404,16 @@
             <span class="hud-stat hud-stat-desktop">Rate: <strong id="hud-rate">1.0x</strong></span>
             <span class="hud-stat">RTT: <strong id="hud-rtt">0ms</strong></span>
             <span class="hud-stat" id="hud-debug-wrap" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-size: 11px;">
-              DEBUG DRIFT: <strong id="hud-debug-drift">0ms</strong> (<span id="hud-debug-zone" style="margin-left: 4px; font-weight: 700; color: #fff;">ZONE 0</span>)
+              DEBUG DRIFT: <strong id="hud-debug-drift">0ms</strong> (<span id="hud-debug-zone" style="margin-left: 4px; font-weight: 700; color: #fff;">DEADBAND</span>) Rate: <strong id="hud-debug-rate" style="font-weight: 700; color: #fff;">1.00x</strong>
             </span>
+          </div>
+
+          <!-- Sync Recovery Banner (Failure escape hatch) -->
+          <div id="sync-recovery-banner" class="sync-recovery-banner" style="display: none;">
+            <div class="sync-recovery-content">
+              <span>⚠️ Sync lost</span>
+              <button type="button" class="sync-recovery-btn" onclick="if(window.partyPlayer) window.partyPlayer.forceResync()">Re-sync Now</button>
+            </div>
           </div>
 
           <video id="media-player" playsinline webkit-playsinline preload="auto"></video>
@@ -1389,10 +1479,16 @@
               </select>
             </div>
 
-            <div class="room-badge" onclick="copyRoomLink()" title="Click to copy invite link">
-              <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">ROOM:</span>
-              <span class="room-badge-code" id="theater-room-code">------</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <div class="room-badge" id="btn-copy-room-badge" onclick="copyRoomLink()" title="Click to copy invite link" role="button" tabindex="0">
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">ROOM:</span>
+                <span class="room-badge-code" id="theater-room-code">------</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </div>
+              <button class="share-trigger-btn" id="btn-share-room" onclick="shareRoomLink()" title="Share Invite via WhatsApp, iMessage, AirDrop, etc.">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                <span>Share</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1410,6 +1506,8 @@
         <div id="chat-panel" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;"></div>
       </div>
     </div>
+  </div>
+
   <!-- Slide-in Movie Browser Panel (Left Sidebar) -->
   <div class="movie-browser-drawer" id="movie-browser-panel">
     <div class="drawer-header">
@@ -1425,13 +1523,15 @@
   <div class="toast" id="toast">Invite Link Copied!</div>
 
   <script type="module">
-    import { MovieBrowser } from '/js/movie-browser.js?v=6788';
-    import { PartyPlayer } from '/js/party-player.js?v=6788';
-    import RichChat from '/js/chat-rich.js?v=6788';
+    // @ts-nocheck
+    import { MovieBrowser } from '/js/movie-browser.js?v=6802';
+    import { PartyPlayer } from '/js/party-player.js?v=6802';
+    import RichChat from '/js/chat-rich.js?v=6802';
 
     // ── StreamSync Browser Engine Client ──────────────────────────────────────────
     let ws = null;
     let clockOffset = 0;
+    window._ntpOffset = 0;
     let isCalibrated = false;
     let bestRtt = 0;
     let clockSamples = [];
@@ -1614,6 +1714,7 @@
         getNtpNow: getNtpNow,
         container: document.querySelector('.video-wrapper'),
       });
+      window.partyPlayer = partyPlayer;
 
       // Synchronize party subtitles and audio track selections (Phase 3)
       partyPlayer.onTracksChange = (tracks) => {
@@ -1897,10 +1998,13 @@
           const rtt = Math.max(0, t3 - t0);
           const offset = Math.round(t1 + (rtt / 2) - t3);
 
-          clockSamples.push({ rtt, offset, time: t3 });
-          if (clockSamples.length > 7) clockSamples.shift();
+          // Discard outliers from background throttled tabs
+          if (rtt < 1500) {
+            clockSamples.push({ rtt, offset, time: t3 });
+            if (clockSamples.length > 7) clockSamples.shift();
+          }
 
-          // Root cause A fix: Marzullo-lite filter on 5+ samples:
+          // Marzullo-lite filter on 5+ samples:
           // discard highest and lowest RTTs, average remaining 3 using Date.now()
           if (clockSamples.length >= 5) {
             const sortedByRtt = [...clockSamples].sort((a, b) => a.rtt - b.rtt);
@@ -1909,12 +2013,14 @@
             clockOffset = Math.round(sumOffset / trimmed.length);
             bestRtt = sortedByRtt[0].rtt;
             isCalibrated = true;
-          } else {
+          } else if (clockSamples.length > 0) {
             const sortedOffsets = clockSamples.map(s => s.offset).sort((a,b) => a - b);
             clockOffset = sortedOffsets[Math.floor(sortedOffsets.length / 2)];
             bestRtt = Math.min(...clockSamples.map(s => s.rtt));
             isCalibrated = clockSamples.length >= 2;
           }
+
+          window._ntpOffset = clockOffset;
 
           const rttEl = document.getElementById('hud-rtt');
           if (rttEl) rttEl.textContent = `${bestRtt}ms`;
@@ -1936,6 +2042,13 @@
           const partyPayload = msg.party || msg;
           const isFromSelf = msg.sender_id && msg.sender_id === localUser.id;
 
+          if (partyPayload.creator_id || msg.host_id) {
+            const hostId = partyPayload.creator_id || msg.host_id;
+            if (currentRoom) currentRoom.creator_id = hostId;
+            localUser.isOwner = (localUser.id === hostId);
+            updateControlPermissions();
+          }
+
           if (partyPayload.video && partyPlayer && !isFromSelf) {
             partyPlayer.handleRemoteVideoChange(partyPayload, isFromSelf);
             if (partyPayload.video.title) {
@@ -1954,12 +2067,17 @@
             handleHostBrowsingChange(partyPayload.browsing);
           }
 
-          if (Array.isArray(msg.users)) updatePeers(msg.users);
+          if (Array.isArray(msg.users)) updatePeers(msg.users, msg.connectionCount);
           break;
         }
 
         case 'users':
-          if (Array.isArray(msg.users)) updatePeers(msg.users);
+          if (Array.isArray(msg.users)) updatePeers(msg.users, msg.connectionCount);
+          if (msg.host_id) {
+            if (currentRoom) currentRoom.creator_id = msg.host_id;
+            localUser.isOwner = (localUser.id === msg.host_id);
+            updateControlPermissions();
+          }
           break;
 
         case 'peer_join':
@@ -1986,6 +2104,43 @@
       return Date.now() + clockOffset;
     }
 
+    async function calibrateNTP() {
+      return new Promise((resolve) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          window._ntpOffset = clockOffset;
+          return resolve(clockOffset);
+        }
+        clockSamples = [];
+        let pingsSent = 0;
+        const interval = setInterval(() => {
+          pingsSent++;
+          sendNtpPing();
+          if (pingsSent >= 4) {
+            clearInterval(interval);
+            setTimeout(() => {
+              window._ntpOffset = clockOffset;
+              resolve(clockOffset);
+            }, 300);
+          }
+        }, 100);
+      });
+    }
+    window.calibrateNTP = calibrateNTP;
+
+    // Failure 1 fix: Recalibrate NTP immediately when tab visibility restores
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[NTP] Recalibrating after visibility restore');
+        calibrateNTP().then((offset) => {
+          window._ntpOffset = offset;
+          clockOffset = offset;
+          if (partyPlayer && typeof partyPlayer.correctDrift === 'function') {
+            partyPlayer.correctDrift();
+          }
+        });
+      }
+    });
+
     // Chat
     function sendTheaterChat() {
       const input = document.getElementById('theater-chat-input');
@@ -1997,9 +2152,12 @@
     }
     window.sendTheaterChat = sendTheaterChat;
 
-    document.getElementById('theater-chat-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendTheaterChat();
-    });
+    const chatInput = document.getElementById('theater-chat-input');
+    if (chatInput) {
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendTheaterChat();
+      });
+    }
 
     function appendChatMessage(sender, text) {
       const box = document.getElementById('theater-messages');
@@ -2013,19 +2171,29 @@
       box.scrollTop = box.scrollHeight;
     }
 
-    function updatePeers(peers) {
+    function updatePeers(peers, connectionCount) {
       const list = document.getElementById('theater-peers-list');
       const count = document.getElementById('sidebar-peers-count');
-      count.textContent = `${peers.length} Watching`;
-      list.innerHTML = '';
+      const uniqueCount = Array.isArray(peers) ? peers.length : 0;
+      const deviceCount = connectionCount || uniqueCount;
 
-      peers.forEach(peer => {
-        const avatar = document.createElement('div');
-        avatar.className = `peer-avatar ${peer.is_owner ? 'is-host' : ''}`;
-        avatar.title = peer.display_name;
-        avatar.textContent = (peer.display_name || 'U').slice(0, 1).toUpperCase();
-        list.appendChild(avatar);
-      });
+      if (count) {
+        if (deviceCount > uniqueCount) {
+          count.textContent = `${uniqueCount} Watching (${deviceCount} devices)`;
+        } else {
+          count.textContent = `${uniqueCount} Watching`;
+        }
+      }
+      if (list && Array.isArray(peers)) {
+        list.innerHTML = '';
+        peers.forEach(peer => {
+          const avatar = document.createElement('div');
+          avatar.className = `peer-avatar ${peer.is_owner ? 'is-host' : ''}`;
+          avatar.title = peer.display_name || peer.name || 'User';
+          avatar.textContent = (peer.display_name || peer.name || 'U').slice(0, 1).toUpperCase();
+          list.appendChild(avatar);
+        });
+      }
     }
 
     async function fetchPeers() {
@@ -2033,39 +2201,131 @@
       try {
         const res = await fetch(`/api/party/${currentRoom.party_id}`);
         const data = await res.json();
-        if (data.users) updatePeers(data.users);
+        if (data.users) updatePeers(data.users, data.connectionCount);
       } catch {}
     }
 
-    // Copy Invite Link (Deep Linked /room/ROOMID)
+    function toggleEpisodes() {
+      if (partyPlayer) {
+        partyPlayer.toggleEpisodesDrawer();
+      }
+    }
+    window.toggleEpisodes = toggleEpisodes;
+
+    // Native Web Share API (Primary Alternative for Mobile)
+    async function shareRoomLink() {
+      const codeSpan = document.getElementById('theater-room-code');
+      let code = (codeSpan?.textContent || '').trim();
+      if (!code || code === '------') {
+        if (currentRoom?.short_id) {
+          code = currentRoom.short_id;
+        }
+      }
+      if (!code || code === '------') {
+        showToast('No active room code to share');
+        return;
+      }
+      const link = `${window.location.origin}/room/${code}`;
+      const titleName = document.getElementById('theater-title')?.textContent || 'Watch Party';
+
+      // Always give immediate visual feedback on the button itself
+      const shareBtn = document.getElementById('btn-share-room');
+      if (shareBtn) {
+        shareBtn.style.transform = 'scale(0.92)';
+        setTimeout(() => { shareBtn.style.transform = ''; }, 200);
+      }
+
+      if (navigator.share && (window.isSecureContext || location.protocol === 'https:')) {
+        try {
+          await navigator.share({
+            title: `Watch on StreamSync`,
+            text: `Join my synchronized watch party for "${titleName}"! (Room: ${code})`,
+            url: link,
+          });
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return; // User closed share sheet intentionally
+          console.warn('navigator.share failed, using clipboard fallback:', err);
+        }
+      }
+      // Direct copy fallback if Web Share is unsupported or throws permission error
+      copyRoomLink();
+    }
+    window.shareRoomLink = shareRoomLink;
+
+    // Bulletproof Copy Invite Link (Deep Linked /room/ROOMID)
     function copyRoomLink() {
-      const code = document.getElementById('theater-room-code').textContent.trim();
-      const link = `${location.origin}/room/${code}`;
+      const codeSpan = document.getElementById('theater-room-code');
+      const badge = document.getElementById('btn-copy-room-badge') || document.querySelector('.room-badge');
+      const code = (codeSpan?.textContent || '').trim();
+      if (!code || code === '------') {
+        showToast('No active room code to copy');
+        return;
+      }
+      const link = `${window.location.origin}/room/${code}`;
+
+      // 1. Direct Visual Feedback on the Badge itself
+      const prevHtml = codeSpan.innerHTML;
+      codeSpan.innerHTML = '<span style="color:#4ade80;font-weight:800;">COPIED! ✓</span>';
+      if (badge) {
+        badge.style.borderColor = '#22c55e';
+        badge.style.background = 'rgba(34, 197, 94, 0.2)';
+      }
+      setTimeout(() => {
+        codeSpan.innerHTML = prevHtml;
+        if (badge) {
+          badge.style.borderColor = '';
+          badge.style.background = '';
+        }
+      }, 2400);
+
+      // 2. Synchronous fallback using temporary input (works on iOS & Android regardless of focus)
+      let copied = false;
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.left = '0';
+        ta.style.width = '2em';
+        ta.style.height = '2em';
+        ta.style.padding = '0';
+        ta.style.border = 'none';
+        ta.style.outline = 'none';
+        ta.style.boxShadow = 'none';
+        ta.style.background = 'transparent';
+        ta.style.fontSize = '16px';
+        document.body.appendChild(ta);
+
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, link.length);
+
+        copied = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (err) {
+        console.warn('execCommand failed:', err);
+      }
+
+      // 3. Modern Clipboard API in parallel
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(link).then(() => {
-          showToast(`Invite Link Copied: ${link}`);
-        }).catch(() => fallbackCopy(link));
-      } else {
-        fallbackCopy(link);
+          copied = true;
+        }).catch(() => {
+          // If iOS blocked clipboard, open the prompt fallback
+          if (!copied) {
+            window.prompt('Copy invite link:', link);
+          }
+        });
+      } else if (!copied) {
+        window.prompt('Copy invite link:', link);
       }
+
+      // 4. Toast notification from top of screen
+      showToast('✓ Invite Link Copied!');
     }
     window.copyRoomLink = copyRoomLink;
-
-    function fallbackCopy(text) {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand('copy');
-        showToast(`Invite Link Copied: ${text}`);
-      } catch {
-        prompt('Copy room link:', text);
-      }
-      document.body.removeChild(ta);
-    }
 
     function copyPath(p) {
       navigator.clipboard.writeText(p);

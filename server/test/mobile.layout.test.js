@@ -66,3 +66,4 @@ test('StreamSync Mobile Viewport & Android Layout Regression Audit', async (t) =
     assert.ok(htmlContent.includes('rgba(13, 13, 13, 0.95) !important'), 'Fallback background color must be opaque');
   });
 });
+
