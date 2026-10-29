@@ -342,6 +342,120 @@
       color: #fff;
     }
 
+    /* Rave & Hearo Style Watch Service Hub */
+    .service-hub-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (min-width: 580px) {
+      .service-hub-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+    .service-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .service-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .service-card.active {
+      border-color: var(--accent-primary);
+      background: rgba(99, 102, 241, 0.12);
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.25);
+    }
+    .service-card.service-netflix.active {
+      border-color: #e50914;
+      background: rgba(229, 9, 20, 0.14);
+      box-shadow: 0 0 20px rgba(229, 9, 20, 0.35);
+    }
+    .service-card.service-prime.active {
+      border-color: #00a8e1;
+      background: rgba(0, 168, 225, 0.14);
+      box-shadow: 0 0 20px rgba(0, 168, 225, 0.35);
+    }
+    .service-card.service-youtube.active {
+      border-color: #ff0000;
+      background: rgba(255, 0, 0, 0.14);
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.35);
+    }
+    .service-card.service-movies.active {
+      border-color: #8b5cf6;
+      background: rgba(139, 92, 246, 0.16);
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.35);
+    }
+    .service-logo-wrap {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 20px;
+    }
+    .service-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+    .service-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .service-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+    }
+    .service-badge.badge-pop {
+      background: rgba(139, 92, 246, 0.25);
+      color: #c084fc;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+    }
+    .service-badge.badge-net {
+      background: rgba(229, 9, 20, 0.2);
+      color: #ff4d4d;
+    }
+    .service-badge.badge-prime {
+      background: rgba(0, 168, 225, 0.2);
+      color: #38bdf8;
+    }
+    .service-badge.badge-yt {
+      background: rgba(255, 0, 0, 0.2);
+      color: #ff8080;
+    }
+    .service-detail-panel {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
     .btn {
       border: none;
       border-radius: 12px;
@@ -1323,33 +1437,140 @@
           <input type="text" class="input-field" id="host-name" value="Host" placeholder="e.g. Alex" />
         </div>
 
-        <!-- Streamo Catalog Feature Banner -->
+        <!-- Rave & Hearo Watch Services Hub -->
         <div>
-          <label class="input-label">Streamo Streaming Catalog (Free Movies & Series)</label>
-          <div class="browse-callout-card" onclick="toggleMovieBrowser(true)">
-            <div style="display: flex; align-items: center; gap: 14px;">
-              <div class="browse-callout-icon">🎬</div>
-              <div>
-                <div style="font-weight: 700; font-size: 14px; color: #fff;">Browse 10,000+ Movies & Shows</div>
-                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Pick Inception, Interstellar, Series or search TMDB</div>
-              </div>
+          <label class="input-label">Select Watch Party Source</label>
+          <div class="service-hub-grid">
+            <!-- Free Movies / Series -->
+            <div class="service-card service-movies active" id="svc-movies" onclick="selectService('movies')">
+              <div class="service-badge badge-pop">10,000+</div>
+              <div class="service-logo-wrap">🎬</div>
+              <div class="service-name">Free Movies</div>
+              <div class="service-sub">No Login Needed</div>
             </div>
-            <button type="button" class="btn btn-primary" style="padding: 8px 16px; font-size: 12px; pointer-events: none;">Browse</button>
+
+            <!-- Netflix -->
+            <div class="service-card service-netflix" id="svc-netflix" onclick="selectService('netflix')">
+              <div class="service-badge badge-net">OFFICIAL</div>
+              <div class="service-logo-wrap">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#e50914"><path d="M4 2v20h4V7.5L16 22h4V2h-4v14.5L8 2z"/></svg>
+              </div>
+              <div class="service-name">Netflix</div>
+              <div class="service-sub">Watch Party</div>
+            </div>
+
+            <!-- Prime Video -->
+            <div class="service-card service-prime" id="svc-prime" onclick="selectService('prime')">
+              <div class="service-badge badge-prime">OFFICIAL</div>
+              <div class="service-logo-wrap">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#00a8e1"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+              </div>
+              <div class="service-name">Prime Video</div>
+              <div class="service-sub">Watch Party</div>
+            </div>
+
+            <!-- YouTube -->
+            <div class="service-card service-youtube" id="svc-youtube" onclick="selectService('youtube')">
+              <div class="service-badge badge-yt">FREE</div>
+              <div class="service-logo-wrap">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+              </div>
+              <div class="service-name">YouTube</div>
+              <div class="service-sub">Videos & Music</div>
+            </div>
           </div>
         </div>
 
-        <div>
-          <label class="input-label" for="video-url">Or Custom Video URL (MP4 / HLS .m3u8)</label>
-          <input type="text" class="input-field" id="video-url" value="https://vjs.zencdn.net/v/oceans.mp4" placeholder="Paste .mp4 or .m3u8 URL" />
+        <!-- Dynamic Service Panels -->
+        <!-- 1. Movies Panel -->
+        <div id="panel-movies" class="service-detail-panel">
+          <div class="browse-callout-card" style="margin: 0;" onclick="toggleMovieBrowser(true)">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="browse-callout-icon">🍿</div>
+              <div>
+                <div style="font-weight: 700; font-size: 14px; color: #fff;">Streamo 10,000+ Movies & Series</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Deadpool, Dilwale, Anime, 4K streams with auto-sync</div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary" style="padding: 8px 16px; font-size: 12px; pointer-events: none;">Open Catalog</button>
+          </div>
         </div>
 
-        <div>
-          <label class="input-label">Quick Stream Presets</label>
-          <div class="presets-row" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
-            <button class="preset-btn" onclick="setPreset('Oceans (Nature)', 'https://vjs.zencdn.net/v/oceans.mp4')">Oceans (MP4)</button>
-            <button class="preset-btn" onclick="setPreset('Sintel Movie', 'https://media.w3.org/2010/05/sintel/trailer.mp4')">Sintel (HD)</button>
-            <button class="preset-btn" onclick="setPreset('Big Buck Bunny', 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4')">Big Buck Bunny</button>
-            <button class="preset-btn" onclick="setPreset('HLS Adaptive', 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')">Mux (HLS .m3u8)</button>
+        <!-- 2. Netflix Panel -->
+        <div id="panel-netflix" class="service-detail-panel" style="display: none; border-color: rgba(229, 9, 20, 0.3);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #e50914; font-weight: 800; font-size: 16px;">NETFLIX</span>
+              <span style="font-size: 13px; font-weight: 600; color: #f8fafc;">Watch Party</span>
+            </div>
+            <span class="badge" style="background: rgba(229, 9, 20, 0.15); color: #ff4d4d; border: 1px solid rgba(229, 9, 20, 0.3);">Cadmium EME Engine</span>
+          </div>
+          <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 12px;">
+            Sync official Netflix streams with your own account across all devices with sub-50ms lock.
+          </p>
+          <label class="input-label" for="netflix-watch-url">Paste Netflix Watch URL or Title ID</label>
+          <input type="text" class="input-field" id="netflix-watch-url" placeholder="https://www.netflix.com/watch/81412345" style="margin-bottom: 10px;" />
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" style="flex: 1; padding: 10px; font-size: 12px;" onclick="openNetflixInApp()">
+              📱 Open in Mobile App
+            </button>
+            <button type="button" class="btn btn-secondary" style="flex: 1; padding: 10px; font-size: 12px;" onclick="copyExtensionHelp()">
+              💻 Extension Sync
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Prime Video Panel -->
+        <div id="panel-prime" class="service-detail-panel" style="display: none; border-color: rgba(0, 168, 225, 0.3);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #00a8e1; font-weight: 800; font-size: 16px;">PRIME VIDEO</span>
+              <span style="font-size: 13px; font-weight: 600; color: #f8fafc;">Watch Party</span>
+            </div>
+            <span class="badge" style="background: rgba(0, 168, 225, 0.15); color: #38bdf8; border: 1px solid rgba(0, 168, 225, 0.3);">DOM Bridge</span>
+          </div>
+          <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 12px;">
+            Sync Amazon Prime Video movies & original series with friends in real-time.
+          </p>
+          <label class="input-label" for="prime-watch-url">Paste Prime Video URL</label>
+          <input type="text" class="input-field" id="prime-watch-url" placeholder="https://www.primevideo.com/detail/..." style="margin-bottom: 10px;" />
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" style="flex: 1; padding: 10px; font-size: 12px;" onclick="openPrimeInApp()">
+              📱 Open in Mobile App
+            </button>
+            <button type="button" class="btn btn-secondary" style="flex: 1; padding: 10px; font-size: 12px;" onclick="copyExtensionHelp()">
+              💻 Extension Sync
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. YouTube Panel -->
+        <div id="panel-youtube" class="service-detail-panel" style="display: none; border-color: rgba(255, 0, 0, 0.3);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #ff0000; font-weight: 800; font-size: 16px;">YOUTUBE</span>
+              <span style="font-size: 13px; font-weight: 600; color: #f8fafc;">Watch Party</span>
+            </div>
+            <span class="badge" style="background: rgba(255, 0, 0, 0.15); color: #ff8080; border: 1px solid rgba(255, 0, 0, 0.3);">IFrame API</span>
+          </div>
+          <label class="input-label" for="youtube-watch-url">Paste YouTube URL</label>
+          <input type="text" class="input-field" id="youtube-watch-url" placeholder="https://www.youtube.com/watch?v=..." style="margin-bottom: 10px;" />
+        </div>
+
+        <!-- Custom / Direct Stream Accordion -->
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 6px 0;" onclick="toggleCustomStreamInput()">
+            <label class="input-label" style="cursor: pointer; margin-bottom: 0;">🌐 Or Custom Video URL (MP4 / HLS .m3u8)</label>
+            <span id="custom-stream-toggle-icon" style="font-size: 12px; color: var(--text-muted);">▼</span>
+          </div>
+          <div id="custom-stream-box" style="display: none; margin-top: 10px;">
+            <input type="text" class="input-field" id="video-url" value="https://vjs.zencdn.net/v/oceans.mp4" placeholder="Paste .mp4 or .m3u8 URL" />
+            <div class="presets-row" style="grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 8px;">
+              <button type="button" class="preset-btn" onclick="setPreset('Oceans (Nature)', 'https://vjs.zencdn.net/v/oceans.mp4')">Oceans (MP4)</button>
+              <button type="button" class="preset-btn" onclick="setPreset('Sintel Movie', 'https://media.w3.org/2010/05/sintel/trailer.mp4')">Sintel (HD)</button>
+              <button type="button" class="preset-btn" onclick="setPreset('Big Buck Bunny', 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4')">Big Buck Bunny</button>
+              <button type="button" class="preset-btn" onclick="setPreset('HLS Adaptive', 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')">Mux (HLS .m3u8)</button>
+            </div>
           </div>
         </div>
 
@@ -1598,11 +1819,78 @@
       }
     });
 
+    let currentService = 'movies';
+
+    function selectService(svc) {
+      currentService = svc;
+      ['movies', 'netflix', 'prime', 'youtube'].forEach(s => {
+        const card = document.getElementById(`svc-${s}`);
+        const panel = document.getElementById(`panel-${s}`);
+        if (card) card.classList.toggle('active', s === svc);
+        if (panel) panel.style.display = (s === svc) ? 'block' : 'none';
+      });
+      if (svc === 'movies') {
+        toggleMovieBrowser(true);
+      }
+    }
+
+    function toggleCustomStreamInput() {
+      const box = document.getElementById('custom-stream-box');
+      const icon = document.getElementById('custom-stream-toggle-icon');
+      if (!box) return;
+      const isHidden = box.style.display === 'none';
+      box.style.display = isHidden ? 'block' : 'none';
+      if (icon) icon.textContent = isHidden ? '▲' : '▼';
+    }
+
+    function openNetflixInApp() {
+      const netflixUrl = document.getElementById('netflix-watch-url').value.trim() || 'https://www.netflix.com';
+      if (window.Capacitor?.Plugins?.InAppBrowser) {
+        window.Capacitor.Plugins.InAppBrowser.open({ url: netflixUrl });
+      } else {
+        window.open(netflixUrl, '_blank');
+      }
+    }
+
+    function openPrimeInApp() {
+      const primeUrl = document.getElementById('prime-watch-url').value.trim() || 'https://www.primevideo.com';
+      if (window.Capacitor?.Plugins?.InAppBrowser) {
+        window.Capacitor.Plugins.InAppBrowser.open({ url: primeUrl });
+      } else {
+        window.open(primeUrl, '_blank');
+      }
+    }
+
+    function copyExtensionHelp() {
+      copyPath('streamsync/apps/extension');
+      alert('Desktop Extension path copied! Load unpacked into chrome://extensions to sync Netflix/Prime in browser tabs.');
+    }
+
     // Handle Create Room
     async function handleCreateRoom() {
       const name = document.getElementById('host-name').value.trim() || 'Host';
-      const url = document.getElementById('video-url').value.trim();
-      if (!url) return alert('Please enter a video URL');
+      
+      let url = '';
+      let provider = 'mp4';
+      let title = 'Stream';
+
+      if (currentService === 'netflix') {
+        url = document.getElementById('netflix-watch-url').value.trim() || 'https://www.netflix.com/watch/81412345';
+        provider = 'netflix';
+        title = 'Netflix Watch Party';
+      } else if (currentService === 'prime') {
+        url = document.getElementById('prime-watch-url').value.trim() || 'https://www.primevideo.com';
+        provider = 'prime';
+        title = 'Prime Video Watch Party';
+      } else if (currentService === 'youtube') {
+        url = document.getElementById('youtube-watch-url').value.trim() || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+        provider = 'youtube';
+        title = 'YouTube Watch Party';
+      } else {
+        url = document.getElementById('video-url')?.value.trim() || 'https://vjs.zencdn.net/v/oceans.mp4';
+        provider = url.includes('.m3u8') ? 'hls' : 'mp4';
+        title = url.split('/').pop().replace(/\.[^/.]+$/, '') || 'Stream';
+      }
 
       localUser.name = name;
       localUser.isOwner = true;
@@ -1617,8 +1905,8 @@
             shared_controls: true,
             video: {
               url,
-              provider: url.includes('.m3u8') ? 'hls' : 'mp4',
-              title: url.split('/').pop().replace(/\.[^/.]+$/, '') || 'Stream',
+              provider,
+              title,
             }
           })
         });
