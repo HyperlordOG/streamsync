@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -21,8 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: streamsync/server/package.json
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -38,14 +39,16 @@ jobs:
           cd streamsync/apps/mobile
           npm install
 
-      - name: Capacitor Sync Android
+      - name: Capacitor Add & Sync Android
         run: |
           cd streamsync/apps/mobile
+          npx cap add android || true
           npx cap sync android
 
       - name: Build Android APK
         run: |
           cd streamsync/apps/mobile/android
+          chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
           mkdir -p ../../../build-artifacts
           cp app/build/outputs/apk/debug/app-debug.apk ../../../build-artifacts/StreamSync.apk
@@ -73,9 +76,10 @@ jobs:
           cd streamsync/apps/mobile
           npm install
 
-      - name: Capacitor Sync iOS
+      - name: Capacitor Add & Sync iOS
         run: |
           cd streamsync/apps/mobile
+          npx cap add ios || true
           npx cap sync ios
 
       - name: Build iOS Archive (Unsigned for AltStore/SideStore)
@@ -133,23 +137,11 @@ jobs:
             ## 🎬 StreamSync Native Mobile Release (${{ github.ref_name }})
             
             ### 📱 Download Links:
-            - **Android:** [StreamSync.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/StreamSync.apk)
-            - **iOS:** [StreamSync.ipa](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/StreamSync.ipa)
+            - **Android APK:** Direct install on Samsung, Pixel, Xiaomi, OnePlus.
+            - **iOS IPA:** For AltStore, SideStore, TrollStore, Scarlet, or Sideloadly.
             
             ### 🛠️ iOS Installation Instructions:
             1. **AltStore / SideStore:** Open `altstore://install?url=https://streamconnectroshni.duckdns.org/downloads/StreamSync.ipa`
-            2. **Scarlet / Sideloadly:** Import `StreamSync.ipa` directly.
-            3. **Safari WebClip (Zero Sideloading):** Visit `https://streamconnectroshni.duckdns.org` in Safari → Tap Share (↑) → Add to Home Screen.
+            2. **Safari WebClip (Zero Sideloading):** Visit `https://streamconnectroshni.duckdns.org` in Safari → Tap Share (↑) → Add to Home Screen.
           draft: false
           prerelease: false
-
-      - name: Deploy to VPS Downloads Hub
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 145.239.142.129
-          port: 20002
-          username: root
-          password: ${{ secrets.VPS_PASSWORD }}
-          source: "release-files/*"
-          target: "/var/www/streamsync/server/public/downloads/"
-          strip_components: 1
