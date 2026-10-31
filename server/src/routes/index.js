@@ -41,7 +41,7 @@ export async function registerRoutes(fastify) {
             type: 'object',
             properties: {
               url:       { type: 'string' },
-              provider:  { type: 'string', enum: ['mp4', 'hls', 'youtube', 'dash', 'netflix', 'prime', 'streamo'] },
+              provider:  { type: 'string', enum: ['mp4', 'hls', 'youtube', 'dash', 'netflix', 'prime', 'streamo', 'neko', 'vidsrc', '2embed', 'vidlink'] },
               title:     { type: 'string' },
               thumbnail: { type: 'string' },
             },
@@ -151,6 +151,17 @@ export async function registerRoutes(fastify) {
     return reply.send(roomSnapshot(room));
   });
 
+
+  // ── GET /api/neko-url ─────────────────────────────────────────────────────
+  // Returns the current Neko virtual browser WebRTC tunnel URL.
+  // Set NEKO_URL env var on VPS to point at the active Cloudflare tunnel.
+  fastify.get('/api/neko-url', async (request, reply) => {
+    const nekoUrl = process.env.NEKO_URL || null;
+    if (!nekoUrl) {
+      return reply.code(503).send({ error: 'Virtual browser not configured', code: 'NEKO_NOT_CONFIGURED' });
+    }
+    return reply.send({ url: nekoUrl, status: 'active' });
+  });
 
   // ── GET /api/health ───────────────────────────────────────────────────────
   fastify.get('/api/health', async () => ({

@@ -399,6 +399,12 @@
       background: rgba(139, 92, 246, 0.16);
       box-shadow: 0 0 20px rgba(139, 92, 246, 0.35);
     }
+    .service-card.service-vbrowser.active,
+    .service-card.service-vbrowser:hover {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.16);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+    }
     .service-logo-wrap {
       width: 40px;
       height: 40px;
@@ -1555,6 +1561,11 @@
       <div class="hero-banner">
         <h1 class="hero-title">Watch Movies Together.<br><span>Sub-Millisecond Lockstep.</span></h1>
         <p class="hero-subtitle">Ultra-low latency NTP virtual timeline engine. Synchronize any web stream, HLS, MP4, or YouTube video between any mobile phone, tablet, or laptop.</p>
+        <div style="margin-top: 14px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" onclick="startDirectVirtualBrowser('https://www.netflix.com', 'Netflix / Prime')" style="padding: 12px 22px; font-size: 14px; font-weight: 800; background: linear-gradient(135deg, #10b981, #059669); border: 1px solid rgba(52, 211, 153, 0.4); box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35); display: inline-flex; align-items: center; gap: 8px;">
+            🖥️ Start Virtual Browser Party (Netflix / Prime / Any Site)
+          </button>
+        </div>
       </div>
 
       <!-- Create Room Card -->
@@ -1611,6 +1622,14 @@
               </div>
               <div class="service-name">YouTube</div>
               <div class="service-sub">Tap to Open</div>
+            </div>
+
+            <!-- Virtual Browser -->
+            <div class="service-card service-vbrowser" id="svc-vbrowser" onclick="openServiceModal('vbrowser')">
+              <div class="service-badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; font-weight: 800;">100% SYNC</div>
+              <div class="service-logo-wrap" style="font-size: 22px;">🖥️</div>
+              <div class="service-name" style="color: #6ee7b7;">Virtual Browser</div>
+              <div class="service-sub">Netflix • Prime • Web</div>
             </div>
           </div>
         </div>
@@ -1834,12 +1853,18 @@
                 <button type="button" class="btn btn-secondary" id="btn-drm-fullscreen-toggle" onclick="toggleDrmFullscreen()" title="Toggle Fullscreen vs Split Chat" style="padding: 4px 10px; font-size: 11px; font-weight: 700;">
                   ⛶ Fullscreen
                 </button>
+                <button type="button" class="btn btn-secondary" id="btn-drm-open-site" onclick="openVirtualBrowserMode()" title="Navigate to Netflix, Prime, Disney+, or any site" style="display: none; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 700; background: rgba(16, 185, 129, 0.25); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; border-radius: 6px;">
+                  🌐 Open Site
+                </button>
+                <button type="button" class="btn btn-secondary" id="btn-virtual-browser-toggle" onclick="switchToVirtualBrowser()" title="Switch to frame-perfect Virtual Browser sync" style="display: none; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 700; background: rgba(16, 185, 129, 0.25); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; border-radius: 6px;">
+                  🖥️ Virtual Browser
+                </button>
                 <button type="button" class="btn btn-secondary" onclick="reloadDrmPlayer()" title="Reload Stream" style="padding: 4px 8px; font-size: 11px;">
                   ⟳
                 </button>
               </div>
             </div>
-            <iframe id="drm-embedded-iframe" style="width: 100%; height: 100%; border: none; padding-top: 38px;" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope" allowfullscreen></iframe>
+            <iframe id="drm-embedded-iframe" style="width: 100%; height: 100%; border: none; padding-top: 38px;" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; microphone; camera; clipboard-read; clipboard-write; display-capture" allowfullscreen></iframe>
           </div>
 
           <!-- Host Browsing Overlay (Guests see when host is selecting a movie) -->
@@ -1890,6 +1915,9 @@
             </button>
             <button class="btn btn-secondary" id="btn-theater-episodes" onclick="toggleEpisodes()" title="Select Season & Episode" style="display: none; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-weight: 700; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.45); color: #c7d2fe; border-radius: 10px;">
               🎞️ Episodes
+            </button>
+            <button class="btn btn-secondary" id="btn-open-virtual-browser" onclick="openVirtualBrowserMode()" title="Open shared Virtual Browser — navigate to Netflix, Prime, any site, 100% synced" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-weight: 700; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.45); color: #6ee7b7; border-radius: 10px;">
+              🖥️ Virtual Browser
             </button>
             <div class="player-info-meta">
               <div class="movie-title" id="theater-title">Movie Playing</div>
@@ -2219,6 +2247,34 @@
             </button>
           </div>
         `;
+      } else if (svc === 'vbrowser') {
+        icon.innerHTML = `<span style="font-size: 26px;">🖥️</span>`;
+        title.textContent = 'Virtual Browser Watch Party';
+        subtitle.textContent = '100% Frame-Perfect Sync on Shared Cloud Browser';
+        body.innerHTML = `
+          <div style="margin-bottom: 16px;">
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 14px;">
+              Both devices connect to the exact same cloud browser. Whatever you play, pause, or search is 100% synchronized in real time.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+              <button type="button" class="btn btn-secondary" onclick="startDirectVirtualBrowser('https://www.netflix.com', 'Netflix')" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-weight: 700; color: #ff4d4d; border-color: rgba(229,9,20,0.4); background: rgba(229,9,20,0.12);">
+                📺 Netflix
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="startDirectVirtualBrowser('https://www.primevideo.com', 'Prime Video')" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-weight: 700; color: #38bdf8; border-color: rgba(0,168,225,0.4); background: rgba(0,168,225,0.12);">
+                🎬 Prime Video
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="startDirectVirtualBrowser('https://www.youtube.com', 'YouTube')" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-weight: 700; color: #fca5a5; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.12);">
+                ▶️ YouTube
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="startDirectVirtualBrowser('https://www.google.com', 'Web Browser')" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-weight: 700; color: #34d399; border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.12);">
+                🌐 Any Site
+              </button>
+            </div>
+            <button type="button" class="btn btn-primary" style="width: 100%; padding: 14px; font-weight: 800; font-size: 14px; background: linear-gradient(135deg, #10b981, #059669); border: none;" onclick="startDirectVirtualBrowser('https://www.netflix.com', 'Virtual Browser')">
+              🚀 Launch Virtual Browser Now
+            </button>
+          </div>
+        `;
       }
 
       overlay.style.display = 'flex';
@@ -2417,6 +2473,10 @@
           badge.textContent = '2EMBED';
           badge.style.background = 'rgba(34, 197, 94, 0.2)';
           badge.style.color = '#4ade80';
+        } else if (provLower === 'neko' || provLower.includes('virtual')) {
+          badge.textContent = '🖥️ VIRTUAL BROWSER';
+          badge.style.background = 'rgba(16, 185, 129, 0.2)';
+          badge.style.color = '#34d399';
         } else {
           badge.textContent = 'VIDLINK (1080P)';
           badge.style.background = 'rgba(99, 102, 241, 0.2)';
@@ -2440,6 +2500,12 @@
         }
       }
 
+      // Show virtual browser toggle button anytime neko provider is active
+      const vbBtn = document.getElementById('btn-virtual-browser-toggle');
+      if (vbBtn) {
+        vbBtn.style.display = (provLower === 'neko' || provLower.includes('virtual')) ? 'inline-flex' : 'none';
+      }
+
       if (container) {
         container.style.display = 'block';
       }
@@ -2449,6 +2515,278 @@
       if (sheet) sheet.style.display = 'none';
     }
     window.loadEmbedPlayerInTheater = loadEmbedPlayerInTheater;
+
+    function buildNekoAutoLoginUrl(baseUrl) {
+      if (!baseUrl) return '';
+      const userName = localUser?.display_name || localUser?.name || 'Guest';
+      if (baseUrl.includes('pwd=')) return baseUrl;
+      const sep = baseUrl.includes('?') ? '&' : '?';
+      return `${baseUrl}${sep}usr=${encodeURIComponent(userName)}&pwd=watch`;
+    }
+
+    /**
+     * startDirectVirtualBrowser — launched directly from Lobby / start page!
+     * Creates room immediately with provider: 'neko' and jumps straight to theater.
+     */
+    async function startDirectVirtualBrowser(targetUrl = 'https://www.netflix.com', title = 'Virtual Browser') {
+      closeServiceModal();
+      const hostName = document.getElementById('host-name')?.value?.trim() || 'Host';
+      localUser.name = hostName;
+      localUser.isOwner = true;
+
+      try {
+        const resNeko = await fetch('/api/neko-url');
+        if (!resNeko.ok) throw new Error('Virtual browser service currently offline');
+        const { url: nekoBase } = await resNeko.json();
+
+        const res = await fetch('/api/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: localUser.id,
+            display_name: hostName,
+            shared_controls: true,
+            video: {
+              url: nekoBase,
+              provider: 'neko',
+              title: `Virtual Browser — ${title}`,
+              thumbnail: '',
+            }
+          })
+        });
+
+        const data = await res.json();
+        if (!data.party_id) throw new Error('Failed to create room');
+
+        enterTheater(data, nekoBase);
+      } catch (err) {
+        alert('Could not start Virtual Browser party: ' + err.message);
+      }
+    }
+    window.startDirectVirtualBrowser = startDirectVirtualBrowser;
+
+    /**
+     * switchToVirtualBrowser — fetches the Neko tunnel URL from /api/neko-url
+     * and loads it into the DRM iframe. All party members watching the same
+     * Neko instance get 100% frame-perfect sync (server-side rendering).
+     */
+    async function switchToVirtualBrowser() {
+      const badge = document.getElementById('drm-toolbar-badge');
+      const iframe = document.getElementById('drm-embedded-iframe');
+      const vbBtn = document.getElementById('btn-virtual-browser-toggle');
+      const openSiteBtn = document.getElementById('btn-drm-open-site');
+
+      if (badge) {
+        badge.textContent = '⏳ Connecting...';
+        badge.style.background = 'rgba(251, 191, 36, 0.2)';
+        badge.style.color = '#fbbf24';
+      }
+
+      try {
+        const res = await fetch('/api/neko-url');
+        if (!res.ok) throw new Error('Virtual browser not configured');
+        const { url } = await res.json();
+
+        // Load Neko into the theater iframe with auto-login query
+        if (iframe) {
+          iframe.src = buildNekoAutoLoginUrl(url);
+        }
+
+        if (badge) {
+          badge.textContent = '🖥️ VIRTUAL BROWSER';
+          badge.style.background = 'rgba(16, 185, 129, 0.2)';
+          badge.style.color = '#34d399';
+        }
+        if (vbBtn) vbBtn.style.display = 'none';
+        if (openSiteBtn) openSiteBtn.style.display = 'inline-flex';
+
+        // Broadcast virtual browser URL to all party members via WebSocket
+        if (ws && ws.readyState === WebSocket.OPEN && currentRoom) {
+          ws.send(JSON.stringify({
+            type: 'video_change',
+            payload: {
+              url: url,
+              provider: 'neko',
+              title: 'Virtual Browser — Frame-Perfect Sync',
+              thumbnail: '',
+              type: 'movie',
+            },
+          }));
+        }
+      } catch (err) {
+        console.error('[VirtualBrowser] Failed to connect:', err);
+        if (badge) {
+          badge.textContent = '❌ VB Unavailable';
+          badge.style.background = 'rgba(239, 68, 68, 0.2)';
+          badge.style.color = '#f87171';
+        }
+        setTimeout(() => loadEmbedPlayerInTheater(currentRoom?.video?.provider, currentRoom?.video?.url), 3000);
+      }
+    }
+    window.switchToVirtualBrowser = switchToVirtualBrowser;
+
+    /**
+     * openVirtualBrowserMode — shows a site-picker modal then loads Neko.
+     * Baby can pick Netflix, Prime Video, Disney+, YouTube, or type any URL.
+     */
+    function openVirtualBrowserMode() {
+      // Remove any existing modal
+      const existing = document.getElementById('vb-site-picker-modal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'vb-site-picker-modal';
+      modal.style.cssText = `
+        position: fixed; inset: 0; z-index: 999999;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
+        display: flex; align-items: center; justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      `;
+      modal.innerHTML = `
+        <div style="background: #0f1623; border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 28px 28px 24px; max-width: 420px; width: 92%; box-shadow: 0 30px 80px rgba(0,0,0,0.7);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+            <div>
+              <div style="font-size:18px; font-weight:800; color:#fff; margin-bottom:4px;">🖥️ Virtual Browser</div>
+              <div style="font-size:12px; color:#64748b;">Frame-perfect sync — everyone sees the same screen</div>
+            </div>
+            <button onclick="document.getElementById('vb-site-picker-modal').remove()" style="background:none; border:none; color:#64748b; font-size:22px; cursor:pointer; padding:4px; line-height:1;">✕</button>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+            <button onclick="window._launchVB('https://www.netflix.com')" style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 10px; background:rgba(229,9,20,0.15); border:1px solid rgba(229,9,20,0.4); border-radius:12px; color:#ff4d4d; cursor:pointer; font-size:13px; font-weight:700;">
+              <span style="font-size:26px;">📺</span> Netflix
+            </button>
+            <button onclick="window._launchVB('https://www.primevideo.com')" style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 10px; background:rgba(0,168,225,0.12); border:1px solid rgba(0,168,225,0.35); border-radius:12px; color:#38bdf8; cursor:pointer; font-size:13px; font-weight:700;">
+              <span style="font-size:26px;">🎬</span> Prime Video
+            </button>
+            <button onclick="window._launchVB('https://www.disneyplus.com')" style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 10px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.35); border-radius:12px; color:#a5b4fc; cursor:pointer; font-size:13px; font-weight:700;">
+              <span style="font-size:26px;">✨</span> Disney+
+            </button>
+            <button onclick="window._launchVB('https://www.youtube.com')" style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 10px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:12px; color:#fca5a5; cursor:pointer; font-size:13px; font-weight:700;">
+              <span style="font-size:26px;">▶️</span> YouTube
+            </button>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <input id="vb-custom-url-input" type="url" placeholder="or paste any URL..." style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:10px 12px; color:#fff; font-size:13px; outline:none;" />
+            <button onclick="window._launchVB(document.getElementById('vb-custom-url-input').value || 'about:blank')" style="padding:10px 16px; background:rgba(16,185,129,0.2); border:1px solid rgba(16,185,129,0.5); border-radius:8px; color:#34d399; font-weight:700; cursor:pointer; font-size:13px;">Go</button>
+          </div>
+          <div style="margin-top:12px; font-size:11px; color:#475569; text-align:center;">
+            The shared Chromium browser loads on a cloud server — all party members see the same screen in real-time
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    }
+    window.openVirtualBrowserMode = openVirtualBrowserMode;
+
+    /**
+     * _launchVB(targetUrl) — fetches Neko URL, appends target as ?url= param,
+     * loads in DRM iframe, broadcasts to room.
+     */
+    window._launchVB = async function(targetUrl) {
+      const modal = document.getElementById('vb-site-picker-modal');
+      if (modal) modal.remove();
+
+      const iframe = document.getElementById('drm-embedded-iframe');
+      const container = document.getElementById('drm-player-container');
+      const badge = document.getElementById('drm-toolbar-badge');
+      const playerEl = document.getElementById('media-player');
+      const videoWrapper = document.querySelector('.video-wrapper');
+      const drmCard = document.getElementById('drm-theater-card');
+
+      // Show container, hide native player
+      if (videoWrapper) videoWrapper.classList.add('drm-active');
+      if (playerEl) playerEl.style.display = 'none';
+      if (drmCard) drmCard.style.display = 'none';
+      if (container) container.style.display = 'block';
+
+      if (badge) {
+        badge.textContent = '⏳ Launching...';
+        badge.style.background = 'rgba(251,191,36,0.2)';
+        badge.style.color = '#fbbf24';
+      }
+
+      try {
+        const res = await fetch('/api/neko-url');
+        if (!res.ok) throw new Error('Neko not configured');
+        const { url: nekoBase } = await res.json();
+
+        // Load Neko with auto-login parameters (no manual password needed)
+        if (iframe) iframe.src = buildNekoAutoLoginUrl(nekoBase);
+
+        const openSiteBtn = document.getElementById('btn-drm-open-site');
+        if (openSiteBtn) openSiteBtn.style.display = 'inline-flex';
+
+        if (badge) {
+          const siteLabel = targetUrl.includes('netflix') ? 'NETFLIX VB'
+            : targetUrl.includes('prime') ? 'PRIME VB'
+            : targetUrl.includes('disney') ? 'DISNEY+ VB'
+            : targetUrl.includes('youtube') ? 'YOUTUBE VB'
+            : '🖥️ VIRTUAL BROWSER';
+          badge.textContent = siteLabel;
+          badge.style.background = 'rgba(16,185,129,0.2)';
+          badge.style.color = '#34d399';
+        }
+
+        // Broadcast to all party members
+        if (ws && ws.readyState === WebSocket.OPEN && currentRoom) {
+          ws.send(JSON.stringify({
+            type: 'video_change',
+            payload: {
+              url: nekoBase,
+              provider: 'neko',
+              title: `Virtual Browser — ${targetUrl}`,
+              thumbnail: '',
+              type: 'movie',
+            },
+          }));
+        }
+      } catch (err) {
+        console.error('[VB] Launch failed:', err);
+        if (badge) { badge.textContent = '❌ VB Unavailable'; badge.style.background = 'rgba(239,68,68,0.2)'; badge.style.color = '#f87171'; }
+      }
+    };
+
+    /**
+     * loadVirtualBrowserInTheater — called when room loads with provider='neko'
+     * so guests auto-join the virtual browser stream directly.
+     */
+    async function loadVirtualBrowserInTheater(url) {
+      const iframe = document.getElementById('drm-embedded-iframe');
+      const container = document.getElementById('drm-player-container');
+      const badge = document.getElementById('drm-toolbar-badge');
+      const playerEl = document.getElementById('media-player');
+      const videoWrapper = document.querySelector('.video-wrapper');
+      const vbBtn = document.getElementById('btn-virtual-browser-toggle');
+
+      if (videoWrapper) videoWrapper.classList.add('drm-active');
+      if (playerEl) playerEl.style.display = 'none';
+
+      // If URL explicitly provided (from room data), use it directly
+      let nekoUrl = url;
+      if (!nekoUrl || nekoUrl === 'neko') {
+        try {
+          const res = await fetch('/api/neko-url');
+          if (res.ok) { const d = await res.json(); nekoUrl = d.url; }
+        } catch {}
+      }
+
+      if (iframe && nekoUrl) iframe.src = buildNekoAutoLoginUrl(nekoUrl);
+      const openSiteBtn = document.getElementById('btn-drm-open-site');
+      if (openSiteBtn) openSiteBtn.style.display = 'inline-flex';
+      if (badge) {
+        badge.textContent = '🖥️ VIRTUAL BROWSER';
+        badge.style.background = 'rgba(16, 185, 129, 0.2)';
+        badge.style.color = '#34d399';
+      }
+      if (vbBtn) vbBtn.style.display = 'none';
+      if (container) container.style.display = 'block';
+      const sheet = document.getElementById('inapp-websheet-overlay');
+      if (sheet) sheet.style.display = 'none';
+    }
+    window.loadVirtualBrowserInTheater = loadVirtualBrowserInTheater;
 
     function loadDrmPlayerInTheater(provider, url) {
       loadEmbedPlayerInTheater(provider, url);
@@ -2620,13 +2958,15 @@
       }
 
       const isDrmProvider = roomData.video?.provider === 'prime' || roomData.video?.provider === 'netflix';
+      const isNekoProvider = roomData.video?.provider === 'neko' || roomData.video?.provider === 'virtual';
       const isEmbedStream = Boolean(
         roomData.video?.mode === 'embed' ||
         (roomData.video?.url && (
           roomData.video.url.includes('vidlink.pro') ||
           roomData.video.url.includes('vidsrc') ||
           roomData.video.url.includes('2embed') ||
-          roomData.video.url.includes('/embed')
+          roomData.video.url.includes('/embed') ||
+          roomData.video.url.includes('trycloudflare.com')
         ))
       );
       const playerEl = document.getElementById('media-player');
@@ -2636,7 +2976,13 @@
 
       if (backNavBtn) backNavBtn.style.display = 'inline-flex';
 
-      if (isDrmProvider) {
+      if (isNekoProvider) {
+        // ── Virtual Browser Mode: 100% frame-perfect sync via Neko WebRTC ──
+        playerEl.style.display = 'none';
+        drmCardEl.style.display = 'none';
+        videoWrapper?.classList.add('drm-active');
+        loadVirtualBrowserInTheater(roomData.video?.url);
+      } else if (isDrmProvider) {
         playerEl.style.display = 'none';
         videoWrapper?.classList.add('drm-active');
 
