@@ -1836,7 +1836,7 @@
                 </button>
               </div>
             </div>
-            <iframe id="drm-embedded-iframe" style="width: 100%; height: 100%; border: none; padding-top: 38px;" allow="autoplay; encrypted-media; fullscreen" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+            <iframe id="drm-embedded-iframe" style="width: 100%; height: 100%; border: none; padding-top: 38px;" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation"></iframe>
           </div>
 
           <!-- Host Browsing Overlay (Guests see when host is selecting a movie) -->
@@ -2374,7 +2374,7 @@
       loadDrmPlayerInTheater(provider, currentUrl);
     }
 
-    function loadDrmPlayerInTheater(provider, url) {
+    function loadEmbedPlayerInTheater(provider, url, customTitle) {
       const container = document.getElementById('drm-player-container');
       const iframe = document.getElementById('drm-embedded-iframe');
       const badge = document.getElementById('drm-toolbar-badge');
@@ -2387,18 +2387,42 @@
       if (playerEl) playerEl.style.display = 'none';
       if (drmCard) drmCard.style.display = 'none';
 
+      const provLower = (provider || 'vidlink').toLowerCase();
       if (badge) {
-        badge.textContent = provider === 'prime' ? 'PRIME VIDEO' : 'NETFLIX';
-        badge.style.background = provider === 'prime' ? 'rgba(0, 168, 225, 0.2)' : 'rgba(229, 9, 20, 0.2)';
-        badge.style.color = provider === 'prime' ? '#38bdf8' : '#ff4d4d';
+        if (provLower === 'prime') {
+          badge.textContent = 'PRIME VIDEO';
+          badge.style.background = 'rgba(0, 168, 225, 0.2)';
+          badge.style.color = '#38bdf8';
+        } else if (provLower === 'netflix') {
+          badge.textContent = 'NETFLIX';
+          badge.style.background = 'rgba(229, 9, 20, 0.2)';
+          badge.style.color = '#ff4d4d';
+        } else if (provLower.includes('vidsrc')) {
+          badge.textContent = 'VIDSRC (HD)';
+          badge.style.background = 'rgba(168, 85, 247, 0.2)';
+          badge.style.color = '#c084fc';
+        } else if (provLower.includes('2embed')) {
+          badge.textContent = '2EMBED';
+          badge.style.background = 'rgba(34, 197, 94, 0.2)';
+          badge.style.color = '#4ade80';
+        } else {
+          badge.textContent = 'VIDLINK (1080P)';
+          badge.style.background = 'rgba(99, 102, 241, 0.2)';
+          badge.style.color = '#818cf8';
+        }
       }
 
-      if (title && currentRoom) {
-        title.textContent = currentRoom.video?.title || (provider === 'prime' ? 'Prime Video' : 'Netflix');
+      const displayTitle = customTitle || currentRoom?.video?.title || (provLower === 'prime' ? 'Prime Video' : 'Theater Stream');
+      if (title) {
+        title.textContent = displayTitle;
+      }
+      const theaterTitle = document.getElementById('theater-title');
+      if (theaterTitle && displayTitle) {
+        theaterTitle.textContent = displayTitle;
       }
 
-      const streamUrl = url || (provider === 'prime' ? 'https://www.primevideo.com' : 'https://www.netflix.com');
-      if (iframe) {
+      const streamUrl = url || (provLower === 'prime' ? 'https://www.primevideo.com' : 'https://www.netflix.com');
+      if (iframe && streamUrl) {
         if (!iframe.src || iframe.src === 'about:blank' || iframe.src !== streamUrl) {
           iframe.src = streamUrl;
         }
@@ -2412,6 +2436,12 @@
       const sheet = document.getElementById('inapp-websheet-overlay');
       if (sheet) sheet.style.display = 'none';
     }
+    window.loadEmbedPlayerInTheater = loadEmbedPlayerInTheater;
+
+    function loadDrmPlayerInTheater(provider, url) {
+      loadEmbedPlayerInTheater(provider, url);
+    }
+    window.loadDrmPlayerInTheater = loadDrmPlayerInTheater;
 
     function toggleDrmFullscreen() {
       const container = document.getElementById('drm-player-container');
@@ -2578,6 +2608,15 @@
       }
 
       const isDrmProvider = roomData.video?.provider === 'prime' || roomData.video?.provider === 'netflix';
+      const isEmbedStream = Boolean(
+        roomData.video?.mode === 'embed' ||
+        (roomData.video?.url && (
+          roomData.video.url.includes('vidlink.pro') ||
+          roomData.video.url.includes('vidsrc') ||
+          roomData.video.url.includes('2embed') ||
+          roomData.video.url.includes('/embed')
+        ))
+      );
       const playerEl = document.getElementById('media-player');
       const drmCardEl = document.getElementById('drm-theater-card');
       const videoWrapper = document.querySelector('.video-wrapper');
@@ -2603,6 +2642,10 @@
           const drmContainer = document.getElementById('drm-player-container');
           if (drmContainer) drmContainer.style.display = 'none';
         }
+      } else if (isEmbedStream && roomData.video?.url) {
+        playerEl.style.display = 'none';
+        drmCardEl.style.display = 'none';
+        loadEmbedPlayerInTheater(roomData.video.provider || 'VidLink', roomData.video.url, roomData.video.title);
       } else {
         playerEl.style.display = 'block';
         drmCardEl.style.display = 'none';

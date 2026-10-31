@@ -2512,21 +2512,35 @@ export class PartyPlayer {
 
       if (!isSameVideo) {
         if (newUrl) {
-          const vTitle = partyPayload.video?.title || 'Party Stream';
-          this.showLoading(`Loading ${vTitle}...`, 'Buffering video stream in sync with host...');
-          let streamReady = false;
-          const onStreamActive = () => {
-            if (streamReady) return;
-            streamReady = true;
-            this.hideLoading();
-            this.video.removeEventListener('playing', onStreamActive);
-            this.video.removeEventListener('canplay', onStreamActive);
-          };
-          this.video.addEventListener('playing', onStreamActive, { once: true });
-          this.video.addEventListener('canplay', onStreamActive, { once: true });
-          setTimeout(onStreamActive, 10000);
+          const isEmbed = Boolean(
+            partyPayload.video.mode === 'embed' ||
+            newUrl.includes('vidlink.pro') ||
+            newUrl.includes('vidsrc') ||
+            newUrl.includes('2embed') ||
+            newUrl.includes('/embed')
+          );
 
-          await this.attachStream(newUrl, partyPayload.video.subtitlesUrl);
+          if (isEmbed) {
+            this.hideLoading();
+            this.hideCountdown();
+            this.attachEmbedStream(newUrl, partyPayload.video.provider || 'VidLink', partyPayload.video.title || 'Party Stream');
+          } else {
+            const vTitle = partyPayload.video?.title || 'Party Stream';
+            this.showLoading(`Loading ${vTitle}...`, 'Buffering video stream in sync with host...');
+            let streamReady = false;
+            const onStreamActive = () => {
+              if (streamReady) return;
+              streamReady = true;
+              this.hideLoading();
+              this.video.removeEventListener('playing', onStreamActive);
+              this.video.removeEventListener('canplay', onStreamActive);
+            };
+            this.video.addEventListener('playing', onStreamActive, { once: true });
+            this.video.addEventListener('canplay', onStreamActive, { once: true });
+            setTimeout(onStreamActive, 10000);
+
+            await this.attachStream(newUrl, partyPayload.video.subtitlesUrl);
+          }
         } else if (newTmdbId) {
           await this.loadStream(partyPayload.video);
         }
@@ -3256,7 +3270,21 @@ export class PartyPlayer {
         });
 
       // Step 3: Attach video locally immediately (no waiting 5+ seconds for subtitles)
-      await this.attachStream(streamUrl, null);
+      const isEmbed = Boolean(
+        data.mode === 'embed' ||
+        streamUrl.includes('vidlink.pro') ||
+        streamUrl.includes('vidsrc') ||
+        streamUrl.includes('2embed') ||
+        streamUrl.includes('/embed')
+      );
+
+      this.currentVideo.mode = isEmbed ? 'embed' : 'hls';
+
+      if (isEmbed) {
+        this.attachEmbedStream(streamUrl, this.currentProvider, title);
+      } else {
+        await this.attachStream(streamUrl, null);
+      }
 
       // Step 4: Broadcast WebSocket party state
       const ntpNow = this.getNtpNow();
@@ -3287,28 +3315,36 @@ export class PartyPlayer {
         }
       });
 
-      // Wait until video has loaded metadata/buffered before clearing loader and starting countdown
-      await new Promise((resolve) => {
-        if (this.video && this.video.readyState >= 1) return resolve();
-        const onReady = () => {
-          if (typeof this.video?.removeEventListener === 'function') {
-            this.video.removeEventListener('loadedmetadata', onReady);
-            this.video.removeEventListener('canplay', onReady);
+      if (!isEmbed) {
+        // Wait until video has loaded metadata/buffered before clearing loader and starting countdown
+        await new Promise((resolve) => {
+          if (this.video && this.video.readyState >= 1) return resolve();
+          const onReady = () => {
+            if (typeof this.video?.removeEventListener === 'function') {
+              this.video.removeEventListener('loadedmetadata', onReady);
+              this.video.removeEventListener('canplay', onReady);
+            }
+            clearTimeout(readyTimer);
+            resolve();
+          };
+          const readyTimer = setTimeout(onReady, 3500);
+          if (typeof this.video?.addEventListener === 'function') {
+            this.video.addEventListener('loadedmetadata', onReady, { once: true });
+            this.video.addEventListener('canplay', onReady, { once: true });
+          } else {
+            resolve();
           }
-          clearTimeout(readyTimer);
-          resolve();
-        };
-        const readyTimer = setTimeout(onReady, 3500);
-        if (typeof this.video?.addEventListener === 'function') {
-          this.video.addEventListener('loadedmetadata', onReady, { once: true });
-          this.video.addEventListener('canplay', onReady, { once: true });
-        } else {
-          resolve();
-        }
-      });
+        });
+      }
 
       // Hide loading overlay before countdown starts
       this.hideLoading();
+
+      if (isEmbed) {
+        this.hideCountdown();
+        this.showToast(`🎬 Now Playing: ${title}`, 'success');
+        return;
+      }
 
       const startAtSec = Number(movie.startAt || 0);
 
@@ -3586,12 +3622,60 @@ export class PartyPlayer {
   }
 
   /**
+   * Attaches third-party embed stream (VidLink, VidSrc, 2Embed) into the theater stage
+   */
+  attachEmbedStream(url, providerName = 'VidLink', title = 'Party Stream') {
+    if (!url) return;
+    this.hideLoading();
+    this.hideCountdown();
+    this._hidePlayPrompt();
+    this.isStreamLoaded = true;
+    this.isHlsManifestLoaded = true;
+
+    if (typeof window !== 'undefined' && typeof window.loadEmbedPlayerInTheater === 'function') {
+      window.loadEmbedPlayerInTheater(providerName, url, title);
+    } else if (typeof document !== 'undefined') {
+      const container = document.getElementById('drm-player-container');
+      const iframe = document.getElementById('drm-embedded-iframe');
+      const badge = document.getElementById('drm-toolbar-badge');
+      const titleEl = document.getElementById('drm-toolbar-title');
+      const playerEl = document.getElementById('media-player');
+      const videoWrapper = document.querySelector('.video-wrapper');
+
+      if (videoWrapper) videoWrapper.classList.add('drm-active');
+      if (playerEl) playerEl.style.display = 'none';
+
+      if (badge) {
+        badge.textContent = `${providerName.toUpperCase()} (HD)`;
+      }
+      if (titleEl) {
+        titleEl.textContent = title;
+      }
+      if (iframe && url) {
+        if (!iframe.src || iframe.src === 'about:blank' || iframe.src !== url) {
+          iframe.src = url;
+        }
+      }
+      if (container) {
+        container.style.display = 'block';
+      }
+    }
+  }
+
+  /**
    * Attaches video stream URL (HLS .m3u8 or MP4)
    * Guaranteed cross-browser sequence for Android, iOS, and Desktop
    */
   async attachStream(url, subtitlesUrl = null) {
     if (!url) return;
     this.isHlsManifestLoaded = false;
+
+    if (typeof document !== 'undefined') {
+      const drmContainer = document.getElementById('drm-player-container');
+      if (drmContainer) drmContainer.style.display = 'none';
+      if (this.video) this.video.style.display = 'block';
+      document.querySelector('.video-wrapper')?.classList.remove('drm-active');
+    }
 
     if (this.hls) {
       this.hls.destroy();
