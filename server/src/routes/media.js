@@ -5,6 +5,135 @@
  */
 
 import { cache } from '../core/cache.js';
+import https from 'node:https';
+import dns from 'node:dns';
+
+// Known official TMDB AWS CloudFront edge IPs (bypasses ISP DNS blocking/poisoning in India and elsewhere)
+const TMDB_IPS = [
+  '3.160.188.68',
+  '3.160.188.33',
+  '3.160.188.106',
+  '3.160.188.125',
+  '108.157.14.80',
+  '108.157.14.15',
+];
+let tmdbIpIndex = 0;
+
+const tmdbHttpsAgent = new https.Agent({
+  keepAlive: true,
+  timeout: 5000,
+  lookup: (hostname, options, callback) => {
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+    if (hostname === 'api.themoviedb.org') {
+      const targetIp = TMDB_IPS[tmdbIpIndex % TMDB_IPS.length];
+      if (options && options.all) {
+        return callback(null, [{ address: targetIp, family: 4 }]);
+      }
+      return callback(null, targetIp, 4);
+    }
+    return dns.lookup(hostname, options, callback);
+  },
+});
+
+function getTmdbKey() {
+  const k = process.env.TMDB_API_KEY;
+  if (k && k !== 'your_tmdb_key_here' && k.trim()) {
+    return k.trim();
+  }
+  return 'ca9f6f20bf89d524e8635b86cbe194c8';
+}
+
+/**
+ * Robust TMDB fetcher that bypasses regional ISP blocks and evaluates key dynamically
+ */
+async function fetchTmdbJson(pathAndQuery) {
+  const apiKey = getTmdbKey();
+  const separator = pathAndQuery.includes('?') ? '&' : '?';
+  const url = `https://api.themoviedb.org/3${pathAndQuery}${separator}api_key=${apiKey}`;
+
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        agent: tmdbHttpsAgent,
+        headers: {
+          'User-Agent': 'StreamSync/1.4.1 (Node.js)',
+          'Accept': 'application/json',
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              resolve(JSON.parse(data));
+            } catch (err) {
+              reject(new Error(`TMDB JSON parse error: ${err.message}`));
+            }
+          } else {
+            tmdbIpIndex++;
+            reject(new Error(`TMDB HTTP ${res.statusCode}: ${data.slice(0, 100)}`));
+          }
+        });
+      }
+    );
+
+    req.on('error', (err) => {
+      tmdbIpIndex++;
+      reject(err);
+    });
+
+    req.setTimeout(4500, () => {
+      req.destroy(new Error('TMDB request timed out after 4500ms'));
+    });
+  });
+}
+
+/**
+ * Secondary meta search via official Stremio Cinemeta catalog
+ */
+async function searchCinemeta(query) {
+  try {
+    const enc = encodeURIComponent(query);
+    const [mRes, sRes] = await Promise.allSettled([
+      fetch(`https://v3-cinemeta.strem.io/catalog/movie/top/search=${enc}.json`, {
+        signal: AbortSignal.timeout(3500),
+      }).then((r) => r.json()),
+      fetch(`https://v3-cinemeta.strem.io/catalog/series/top/search=${enc}.json`, {
+        signal: AbortSignal.timeout(3500),
+      }).then((r) => r.json()),
+    ]);
+
+    const metas = [
+      ...(mRes.status === 'fulfilled' && mRes.value?.metas ? mRes.value.metas : []),
+      ...(sRes.status === 'fulfilled' && sRes.value?.metas ? sRes.value.metas : []),
+    ];
+
+    const results = [];
+    const seen = new Set();
+    for (const m of metas) {
+      if (!m || !m.name || seen.has(m.id)) continue;
+      seen.add(m.id);
+      results.push({
+        tmdbId: m.imdb_id || m.id,
+        type: m.type === 'series' ? 'tv' : 'movie',
+        title: m.name,
+        year: String(m.releaseInfo || m.year || '').slice(0, 4),
+        poster: m.poster || '',
+        backdrop: m.background || m.poster || '',
+        rating: m.imdbRating ? Number(Number(m.imdbRating).toFixed(1)) : 7.0,
+        overview: m.description || `${m.name} (${m.year || ''})`,
+      });
+    }
+    return results;
+  } catch (err) {
+    return [];
+  }
+}
 
 const PRIORITY = {
   relay: 0,
@@ -491,7 +620,8 @@ export default async function mediaRoutes(fastify) {
       return reply.code(400).send({ error: 'Query parameter q is required' });
     }
 
-    const cacheKey = `search:${q.trim().toLowerCase()}:${type}`;
+    const cleanQ = q.trim();
+    const cacheKey = `search:${cleanQ.toLowerCase()}:${type}`;
     const cached = await cache.get(cacheKey);
     if (cached) {
       return reply.header('X-Cache', 'HIT').send(cached);
@@ -500,88 +630,51 @@ export default async function mediaRoutes(fastify) {
     let results = [];
     const seenIds = new Set();
 
-    // 1. Primary: Query Streamo's Live Search API (Unblocked, fast, exact streamable catalog)
+    // 1. Primary: Direct TMDB Multi-Search with anti-ISP blocking CloudFront resolver
     try {
-      const streamoSearchUrl = `https://streamo.st/api/search?q=${encodeURIComponent(q)}`;
-      const sRes = await fetch(streamoSearchUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Referer': STREAMO_REFERER,
-          'Accept': 'application/json',
-        },
-        signal: AbortSignal.timeout(4500),
-      });
+      const tmdbData = await fetchTmdbJson(
+        `/search/multi?query=${encodeURIComponent(cleanQ)}&include_adult=false`
+      );
 
-      if (sRes.ok) {
-        const sData = await sRes.json();
-        const allItems = [
-          ...(sData.movies || []).map((m) => ({ ...m, inferredType: 'movie' })),
-          ...(sData.series || []).map((s) => ({ ...s, inferredType: 'tv' })),
-          ...(sData.anime || []).map((a) => ({ ...a, inferredType: 'tv' })),
-        ];
-
-        for (const item of allItems) {
-          const href = item.href || '';
-          const match = href.match(/\/(movies|series|anime)\/(\d+)/);
-          const tmdbId = match ? Number(match[2]) : null;
-
-          if (tmdbId && !seenIds.has(tmdbId)) {
-            seenIds.add(tmdbId);
-            const mediaItem = {
-              tmdbId,
-              type: item.inferredType,
-              title: item.title || '',
-              year: String(item.year || ''),
-              poster: item.posterPath ? `https://image.tmdb.org/t/p/w300${item.posterPath}` : '',
-              backdrop: item.backdropPath ? `https://image.tmdb.org/t/p/original${item.backdropPath}` : '',
-              rating: item.rating ? Number(Number(item.rating).toFixed(1)) : 0,
-              overview: `${item.title} (${item.year || ''})`,
-            };
-            results.push(mediaItem);
-          }
+      for (const item of tmdbData.results || []) {
+        if ((item.media_type === 'movie' || item.media_type === 'tv') && !seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          results.push({
+            tmdbId: item.id,
+            type: item.media_type === 'tv' ? 'tv' : 'movie',
+            title: item.title || item.name || '',
+            year: (item.release_date || item.first_air_date || '').slice(0, 4),
+            poster: item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : '',
+            backdrop: item.backdrop_path
+              ? `https://image.tmdb.org/t/p/original${item.backdrop_path}`
+              : (item.poster_path ? `https://image.tmdb.org/t/p/original${item.poster_path}` : ''),
+            rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : 0,
+            overview: item.overview || '',
+          });
         }
       }
     } catch (err) {
-      console.warn('[Streamo Search] Search warning:', err.message);
+      console.warn('[TMDB Search] Query warning:', err.message);
     }
 
-    // 2. Secondary: If TMDB_KEY is provided and reachable, enrich results
-    if (TMDB_KEY && TMDB_KEY !== 'your_tmdb_key_here') {
+    // 2. Secondary: If TMDB yielded 0 results, search Stremio Cinemeta catalog
+    if (!results.length) {
       try {
-        const tmdbUrl = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(
-          q
-        )}&api_key=${TMDB_KEY}&include_adult=false`;
-        const res = await fetch(tmdbUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          signal: AbortSignal.timeout(2500), // Short timeout in case ISP blocks TMDB
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          for (const item of data.results || []) {
-            if ((item.media_type === 'movie' || item.media_type === 'tv') && !seenIds.has(item.id)) {
-              seenIds.add(item.id);
-              results.push({
-                tmdbId: item.id,
-                type: item.media_type === 'tv' ? 'tv' : 'movie',
-                title: item.title || item.name || '',
-                year: (item.release_date || item.first_air_date || '').slice(0, 4),
-                poster: item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : '',
-                backdrop: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : '',
-                rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : 0,
-                overview: item.overview || '',
-              });
-            }
+        const cinemetaResults = await searchCinemeta(cleanQ);
+        for (const item of cinemetaResults) {
+          if (!seenIds.has(item.tmdbId)) {
+            seenIds.add(item.tmdbId);
+            results.push(item);
           }
         }
-      } catch (err) {
-        // TMDB timeout or DNS block: expected on some regional networks
+      } catch (cinErr) {
+        console.warn('[Cinemeta Search] Query warning:', cinErr.message);
       }
     }
 
-    // 3. Fallback search match against local catalog
+    // 3. Tertiary: Local fallback catalog match
     if (!results.length) {
-      const queryLower = q.toLowerCase();
+      const queryLower = cleanQ.toLowerCase();
       results = FALLBACK_MOVIES.filter(
         (m) =>
           m.title.toLowerCase().includes(queryLower) ||
@@ -604,35 +697,27 @@ export default async function mediaRoutes(fastify) {
     let results = [];
     const seenIds = new Set();
 
-    if (TMDB_KEY && TMDB_KEY !== 'your_tmdb_key_here') {
-      try {
-        const tmdbUrl = `https://api.themoviedb.org/3/trending/all/week?api_key=${TMDB_KEY}`;
-        const res = await fetch(tmdbUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          signal: AbortSignal.timeout(2500),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          for (const item of data.results || []) {
-            if ((item.media_type === 'movie' || item.media_type === 'tv') && !seenIds.has(item.id)) {
-              seenIds.add(item.id);
-              results.push({
-                tmdbId: item.id,
-                type: item.media_type === 'tv' ? 'tv' : 'movie',
-                title: item.title || item.name || '',
-                year: (item.release_date || item.first_air_date || '').slice(0, 4),
-                poster: item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : '',
-                backdrop: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : '',
-                rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : 0,
-                overview: item.overview || '',
-              });
-            }
-          }
+    try {
+      const tmdbData = await fetchTmdbJson('/trending/all/week');
+      for (const item of tmdbData.results || []) {
+        if ((item.media_type === 'movie' || item.media_type === 'tv') && !seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          results.push({
+            tmdbId: item.id,
+            type: item.media_type === 'tv' ? 'tv' : 'movie',
+            title: item.title || item.name || '',
+            year: (item.release_date || item.first_air_date || '').slice(0, 4),
+            poster: item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : '',
+            backdrop: item.backdrop_path
+              ? `https://image.tmdb.org/t/p/original${item.backdrop_path}`
+              : (item.poster_path ? `https://image.tmdb.org/t/p/original${item.poster_path}` : ''),
+            rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : 0,
+            overview: item.overview || '',
+          });
         }
-      } catch (err) {
-        // Fallback to rich catalog on network block
       }
+    } catch (err) {
+      console.warn('[TMDB Trending] Fetch warning:', err.message);
     }
 
     if (!results.length) {
@@ -1272,50 +1357,59 @@ export default async function mediaRoutes(fastify) {
 
     if (cached && !isDummyTv) return reply.send(cached);
 
-    // 1. If TV show, try scraping Streamo series directly for rich season & episode trees
+    // 1. Primary: Direct TMDB details query with credits and trailers
+    try {
+      const d = await fetchTmdbJson(`/${type}/${tmdbId}?append_to_response=credits,videos`);
+      if (d && (d.id || d.title || d.name)) {
+        const detail = {
+          tmdbId: d.id || Number(tmdbId),
+          type,
+          title: d.title || d.name || '',
+          year: (d.release_date || d.first_air_date || '').slice(0, 4),
+          runtime: d.runtime || (d.episode_run_time ? d.episode_run_time[0] : 0) || (type === 'tv' ? 45 : 120),
+          genres: (d.genres || []).map((g) => g.name),
+          rating: d.vote_average ? Number(d.vote_average.toFixed(1)) : 7.5,
+          overview: d.overview || '',
+          poster: d.poster_path ? `https://image.tmdb.org/t/p/w300${d.poster_path}` : '',
+          backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/original${d.backdrop_path}` : (d.poster_path ? `https://image.tmdb.org/t/p/original${d.poster_path}` : ''),
+          cast: (d.credits?.cast || []).slice(0, 8).map((c) => c.name),
+          trailerKey: d.videos?.results?.find((v) => v.type === 'Trailer')?.key || null,
+          seasons: (d.seasons || []).map((s) => ({
+            seasonNumber: s.season_number,
+            name: s.name,
+            overview: s.overview || '',
+            poster: s.poster_path ? `https://image.tmdb.org/t/p/w300${s.poster_path}` : '',
+            episodeCount: s.episode_count,
+            episodes: [],
+          })),
+          seasonsCount: d.number_of_seasons || (d.seasons?.length || 1),
+          episodesCount: d.number_of_episodes || 0,
+        };
+        await cache.set(cacheKey, detail, 24 * 3600);
+        return reply.send(detail);
+      }
+    } catch (tmdbErr) {
+      console.warn(`[TMDB Detail] ${type}/${tmdbId} fetch warning:`, tmdbErr.message);
+    }
+
+    // 2. Secondary: If TV show, try scraping Streamo series directly
     if (type === 'tv') {
-      const streamoTv = await fetchStreamoSeriesDetails(tmdbId, '', cached?.title || '');
-      if (streamoTv && streamoTv.seasons?.length) {
-        await cache.set(cacheKey, streamoTv, 24 * 3600);
-        return reply.send(streamoTv);
-      }
-    }
-
-    // 2. If Movie, try scraping Streamo movie page directly
-    if (type === 'movie') {
-      const streamoMovie = await fetchStreamoMovieDetails(tmdbId);
-      if (streamoMovie && streamoMovie.title) {
-        await cache.set(cacheKey, streamoMovie, 24 * 3600);
-        return reply.send(streamoMovie);
-      }
-    }
-
-    // 3. Try TMDB if API key is provided and reachable
-    if (TMDB_KEY && TMDB_KEY !== 'your_tmdb_key_here') {
       try {
-        const url = `https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${TMDB_KEY}&append_to_response=credits,videos`;
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(3000) });
-        if (res.ok) {
-          const d = await res.json();
-          const detail = {
-            tmdbId: d.id,
-            type,
-            title: d.title || d.name || '',
-            year: (d.release_date || d.first_air_date || '').slice(0, 4),
-            runtime: d.runtime || (d.episode_run_time ? d.episode_run_time[0] : 0),
-            genres: (d.genres || []).map((g) => g.name),
-            rating: d.vote_average ? Number(d.vote_average.toFixed(1)) : 0,
-            overview: d.overview || '',
-            poster: d.poster_path ? `https://image.tmdb.org/t/p/w300${d.poster_path}` : '',
-            backdrop: d.backdrop_path ? `https://image.tmdb.org/t/p/original${d.backdrop_path}` : '',
-            cast: (d.credits?.cast || []).slice(0, 5).map((c) => c.name),
-            trailerKey: d.videos?.results?.find((v) => v.type === 'Trailer')?.key || null,
-            seasons: d.seasons || [],
-            seasonsCount: d.number_of_seasons || (d.seasons?.length || 1),
-            episodesCount: d.number_of_episodes || 0,
-          };
-          await cache.set(cacheKey, detail, 24 * 3600);
-          return reply.send(detail);
+        const streamoTv = await fetchStreamoSeriesDetails(tmdbId, '', cached?.title || '');
+        if (streamoTv && streamoTv.seasons?.length) {
+          await cache.set(cacheKey, streamoTv, 24 * 3600);
+          return reply.send(streamoTv);
+        }
+      } catch {}
+    }
+
+    // 3. Secondary: If Movie, try scraping Streamo movie page directly
+    if (type === 'movie') {
+      try {
+        const streamoMovie = await fetchStreamoMovieDetails(tmdbId);
+        if (streamoMovie && streamoMovie.title) {
+          await cache.set(cacheKey, streamoMovie, 24 * 3600);
+          return reply.send(streamoMovie);
         }
       } catch {}
     }
@@ -1323,20 +1417,15 @@ export default async function mediaRoutes(fastify) {
     // 4. Fallback catalog
     const fallback = FALLBACK_MOVIES.find((m) => m.tmdbId === Number(tmdbId));
     if (fallback) {
-      if (fallback.type === 'tv') {
-        const streamoTv = await fetchStreamoSeriesDetails(tmdbId);
-        if (streamoTv) {
-          await cache.set(cacheKey, streamoTv, 24 * 3600);
-          return reply.send(streamoTv);
-        }
-      }
-
       return reply.send({
         ...fallback,
-        runtime: 148,
-        genres: ['Action', 'Sci-Fi', 'Adventure'],
-        cast: ['Leonardo DiCaprio', 'Joseph Gordon-Levitt', 'Elliot Page'],
+        runtime: fallback.type === 'tv' ? 48 : 148,
+        genres: ['Action', 'Sci-Fi', 'Drama'],
+        cast: ['Leonardo DiCaprio', 'Joseph Gordon-Levitt', 'Bryan Cranston'],
         trailerKey: 'YoHD9XEInc0',
+        seasons: fallback.type === 'tv' ? [{ seasonNumber: 1, name: 'Season 1', episodes: [{ episodeNumber: 1, name: 'Episode 1' }] }] : [],
+        seasonsCount: 1,
+        episodesCount: 1,
       });
     }
 
@@ -1347,13 +1436,15 @@ export default async function mediaRoutes(fastify) {
       title: `${type === 'tv' ? 'Series' : 'Movie'} #${tmdbId}`,
       year: '',
       rating: 7.0,
-      overview: 'Available on Streamo streaming network.',
+      overview: 'Available for watch party streaming on StreamSync.',
       poster: '',
       backdrop: '',
       genres: ['Action', 'Adventure'],
       cast: [],
       runtime: 120,
       seasons: type === 'tv' ? [{ seasonNumber: 1, name: 'Season 1', episodes: [{ episodeNumber: 1, name: 'Episode 1' }] }] : [],
+      seasonsCount: 1,
+      episodesCount: 1,
     };
     return reply.send(safeDetail);
   };
@@ -1370,7 +1461,34 @@ export default async function mediaRoutes(fastify) {
     const cached = await cache.get(cacheKey);
     if (cached) return reply.send(cached);
 
-    // Look in TV show detail cache or scrape
+    // 1. Primary: Direct TMDB Season query (bypasses ISP blocks, instant rich episodes)
+    try {
+      const d = await fetchTmdbJson(`/tv/${tmdbId}/season/${sNum}`);
+      if (d && Array.isArray(d.episodes) && d.episodes.length > 0) {
+        const seasonData = {
+          seasonNumber: d.season_number ?? sNum,
+          name: d.name || `Season ${sNum}`,
+          overview: d.overview || '',
+          poster: d.poster_path ? `https://image.tmdb.org/t/p/w300${d.poster_path}` : '',
+          episodes: d.episodes.map((ep) => ({
+            id: ep.id,
+            episodeNumber: ep.episode_number,
+            name: ep.name,
+            overview: ep.overview || '',
+            airDate: ep.air_date ? ep.air_date.slice(0, 10) : '',
+            runtime: ep.runtime || 0,
+            still: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : '',
+            rating: ep.vote_average ? Number(ep.vote_average.toFixed(1)) : 0,
+          })),
+        };
+        await cache.set(cacheKey, seasonData, 24 * 3600);
+        return reply.send(seasonData);
+      }
+    } catch (tmdbErr) {
+      console.warn(`[TMDB Season] /tv/${tmdbId}/season/${sNum} fetch warning:`, tmdbErr.message);
+    }
+
+    // 2. Secondary: Look in TV show detail cache or scrape
     let tvDetail = await cache.get(`detail:tv:${tmdbId}`);
     const isDummyDetail =
       !tvDetail ||
