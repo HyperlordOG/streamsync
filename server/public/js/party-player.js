@@ -4446,10 +4446,9 @@ export class PartyPlayer {
 
   _buildDiagHUD() {
     if (typeof document === 'undefined') return;
-    if (document.getElementById('sync-diag-hud')) {
-      this._diagHUD = document.getElementById('sync-diag-hud');
-    } else {
-      const hud = document.createElement('div');
+    let hud = document.getElementById('sync-diag-hud');
+    if (!hud) {
+      hud = document.createElement('div');
       hud.id = 'sync-diag-hud';
       hud.style.cssText = `
         position: fixed;
@@ -4470,9 +4469,8 @@ export class PartyPlayer {
         box-shadow: 0 2px 10px rgba(0,255,136,0.2);
       `;
       document.body.appendChild(hud);
-      this._diagHUD = hud;
     }
-    hud.id = 'sync-diag-hud';
+    this._diagHUD = hud;
     hud.style.cssText = `
       position: fixed;
       top: env(safe-area-inset-top, 0px);

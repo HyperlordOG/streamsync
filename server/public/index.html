@@ -2728,8 +2728,14 @@
         }
       }
 
-      if (!isDrmProvider && videoUrl) {
+      if (!isDrmProvider && !isEmbedStream && videoUrl) {
         partyPlayer.attachStream(videoUrl, roomData.video?.subtitlesUrl).catch(() => {});
+      } else if (isEmbedStream && roomData.video?.url) {
+        // When joining a room already playing an embedded stream, attach embed player immediately
+        partyPlayer.attachEmbedStream(roomData.video.url, roomData.video.provider || 'VidLink', roomData.video.title || 'Party Stream');
+      } else if (!videoUrl && roomData.video?.tmdbId) {
+        // Guest joined room where stream is being resolved via TMDB ID
+        partyPlayer.loadStream(roomData.video).catch(() => {});
       }
 
       if (roomData.sync && partyPlayer) {
@@ -2958,6 +2964,9 @@
         }, 120);
         if (pingTimer) clearInterval(pingTimer);
         pingTimer = setInterval(sendNtpPing, 4000);
+
+        // Immediately fetch peers to guarantee presence count displays accurately upon connecting
+        fetchPeers();
       };
 
       ws.onmessage = (event) => {
@@ -2965,6 +2974,10 @@
           const msg = JSON.parse(event.data);
           handleWsMessage(msg);
         } catch {}
+      };
+
+      ws.onerror = (err) => {
+        console.warn('[WS] Socket error:', err);
       };
 
       ws.onclose = () => {
