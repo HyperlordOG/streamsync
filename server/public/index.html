@@ -2965,8 +2965,7 @@
           roomData.video.url.includes('vidlink.pro') ||
           roomData.video.url.includes('vidsrc') ||
           roomData.video.url.includes('2embed') ||
-          roomData.video.url.includes('/embed') ||
-          roomData.video.url.includes('trycloudflare.com')
+          roomData.video.url.includes('/embed')
         ))
       );
       const playerEl = document.getElementById('media-player');
@@ -3074,12 +3073,12 @@
         }
       }
 
-      if (!isDrmProvider && !isEmbedStream && videoUrl) {
+      if (!isNekoProvider && !isDrmProvider && !isEmbedStream && videoUrl) {
         partyPlayer.attachStream(videoUrl, roomData.video?.subtitlesUrl).catch(() => {});
-      } else if (isEmbedStream && roomData.video?.url) {
+      } else if (!isNekoProvider && isEmbedStream && roomData.video?.url) {
         // When joining a room already playing an embedded stream, attach embed player immediately
         partyPlayer.attachEmbedStream(roomData.video.url, roomData.video.provider || 'VidLink', roomData.video.title || 'Party Stream');
-      } else if (!videoUrl && roomData.video?.tmdbId) {
+      } else if (!isNekoProvider && !videoUrl && roomData.video?.tmdbId) {
         // Guest joined room where stream is being resolved via TMDB ID
         partyPlayer.loadStream(roomData.video).catch(() => {});
       }
