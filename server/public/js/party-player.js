@@ -2815,7 +2815,24 @@ export class PartyPlayer {
         if (!res.ok) throw new Error(`TV fetch failed: HTTP ${res.status}`);
         const data = await res.json();
         this.currentSeriesDetails = data;
-        this._populateSeasonDropdown(data.seasons || []);
+        const seasons = data.seasons || [];
+
+        // Ensure current active season's episodes are fetched from /tv/:tmdbId/season/:seasonNumber
+        const curSeasonNum = Number(this.currentVideo?.season || 1);
+        let curSeason = seasons.find((s) => Number(s.seasonNumber) === curSeasonNum);
+        if (curSeason && (!curSeason.episodes || curSeason.episodes.length === 0)) {
+          try {
+            const sRes = await fetch(`/api/media/tv/${numId}/season/${curSeasonNum}`);
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (sData?.episodes?.length) {
+                curSeason.episodes = sData.episodes;
+              }
+            }
+          } catch (e) {}
+        }
+
+        this._populateSeasonDropdown(seasons);
       } catch (err) {
         console.warn('[PartyPlayer] Failed fetching series seasons:', err);
         if (listEl) {
@@ -2874,6 +2891,39 @@ export class PartyPlayer {
 
     if (!curSeason && seasons.length > 0) {
       curSeason = seasons[0];
+    }
+
+    // If season episodes are missing, lazy fetch them immediately
+    if (curSeason && (!curSeason.episodes || curSeason.episodes.length === 0)) {
+      listEl.innerHTML = `<div style="text-align: center; color: #94a3b8; padding: 24px;"><div style="display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px;"></div><br>Loading Season ${sNum} episodes...</div>`;
+      const numId = this.currentSeriesDetails?.tmdbId || this.currentVideo?.tmdbId;
+      if (numId) {
+        fetch(`/api/media/tv/${numId}/season/${sNum}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((sData) => {
+            if (sData?.episodes?.length) {
+              curSeason.episodes = sData.episodes;
+              this._renderEpisodesInDrawer(sNum);
+            } else {
+              // Synthesize fallback episodes from episodeCount
+              const count = curSeason.episodeCount || 12;
+              curSeason.episodes = [];
+              for (let ep = 1; ep <= count; ep++) {
+                curSeason.episodes.push({
+                  episodeNumber: ep,
+                  name: `Episode ${ep}`,
+                  still: this.currentVideo?.poster || '',
+                  runtime: 45,
+                });
+              }
+              this._renderEpisodesInDrawer(sNum);
+            }
+          })
+          .catch(() => {
+            listEl.innerHTML = `<div style="text-align: center; color: #64748b; padding: 24px;">No episodes found for this season.</div>`;
+          });
+        return;
+      }
     }
 
     if (!curSeason || !curSeason.episodes || curSeason.episodes.length === 0) {
@@ -3672,9 +3722,11 @@ export class PartyPlayer {
 
     if (typeof document !== 'undefined') {
       const drmContainer = document.getElementById('drm-player-container');
-      if (drmContainer) drmContainer.style.display = 'none';
-      if (this.video) this.video.style.display = 'block';
-      document.querySelector('.video-wrapper')?.classList.remove('drm-active');
+      if (drmContainer && drmContainer.style) drmContainer.style.display = 'none';
+      if (this.video && this.video.style) this.video.style.display = 'block';
+      if (typeof document.querySelector === 'function') {
+        document.querySelector('.video-wrapper')?.classList?.remove('drm-active');
+      }
     }
 
     if (this.hls) {
@@ -4333,26 +4385,30 @@ export class PartyPlayer {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     // Existing visibilitychange — keep it
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        this._recalibrateNTP();
-      }
-    });
+    if (typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this._recalibrateNTP();
+        }
+      });
+    }
 
     // iOS-specific fallback — fires when user returns to this tab from bfcache
-    window.addEventListener('pageshow', (event) => {
-      if (event.persisted) {
-        this._recalibrateNTP();
-      }
-    });
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+          this._recalibrateNTP();
+        }
+      });
 
-    // Also recalibrate on focus — catches iOS tab-switch cases
-    window.addEventListener('focus', () => {
-      const now = Date.now();
-      if (now - (this._lastNTPCalibration || 0) > 30000) {
-        this._recalibrateNTP();
-      }
-    });
+      // Also recalibrate on focus — catches iOS tab-switch cases
+      window.addEventListener('focus', () => {
+        const now = Date.now();
+        if (now - (this._lastNTPCalibration || 0) > 30000) {
+          this._recalibrateNTP();
+        }
+      });
+    }
   }
 
   async _recalibrateNTP() {
@@ -4407,7 +4463,7 @@ export class PartyPlayer {
         padding: 6px 12px;
         z-index: 99999;
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 2px 8px;
         pointer-events: none;
         border-bottom: 1px solid #00ff88;
@@ -4429,7 +4485,7 @@ export class PartyPlayer {
       padding: 6px 12px;
       z-index: 99999;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 2px 8px;
       pointer-events: none;
       border-bottom: 1px solid #00ff88;
@@ -4586,7 +4642,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         padding: 6px 12px;
         z-index: 99999;
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 2px 8px;
         pointer-events: none;
         border-bottom: 1px solid #00ff88;

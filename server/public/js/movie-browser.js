@@ -654,10 +654,49 @@ export class MovieBrowser {
       // Default to season 1 if available, otherwise first season
       let selectedSeasonNumber = seasons.find((s) => s.seasonNumber === 1)?.seasonNumber ?? (seasons[0]?.seasonNumber || 1);
 
+      // Async loader for lazy-fetching season episodes if not bundled
+      const fetchSeasonEpisodes = async (sNum) => {
+        const curSeason = seasons.find((s) => s.seasonNumber === sNum);
+        if (curSeason && curSeason.episodes && curSeason.episodes.length > 0) {
+          return curSeason.episodes;
+        }
+        try {
+          const sRes = await fetch(`/api/media/tv/${tmdbId}/season/${sNum}`);
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            if (sData && Array.isArray(sData.episodes) && sData.episodes.length > 0) {
+              if (curSeason) {
+                curSeason.episodes = sData.episodes;
+              } else {
+                seasons.push({ seasonNumber: sNum, name: sData.name || `Season ${sNum}`, episodes: sData.episodes });
+              }
+              return sData.episodes;
+            }
+          }
+        } catch (fetchSeasonErr) {
+          console.warn('[MovieBrowser] Season fetch error:', fetchSeasonErr);
+        }
+
+        // Fallback: Synthesize episodes if season count exists
+        const count = curSeason?.episodeCount || 12;
+        const generated = [];
+        for (let ep = 1; ep <= count; ep++) {
+          generated.push({
+            episodeNumber: ep,
+            name: `Episode ${ep}`,
+            airDate: '',
+            runtime: d.runtime || 45,
+            still: d.backdrop || d.poster,
+          });
+        }
+        if (curSeason) curSeason.episodes = generated;
+        return generated;
+      };
+
       const renderEpisodesHtml = (sNum) => {
         const curSeason = seasons.find((s) => s.seasonNumber === sNum);
         if (!curSeason || !curSeason.episodes || curSeason.episodes.length === 0) {
-          return `<div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 24px;">No episodes listed for this season.</div>`;
+          return `<div style="grid-column: 1/-1; text-align: center; color: #94a3b8; padding: 24px;"><div style="display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px;"></div><br>Loading episodes for Season ${sNum}...</div>`;
         }
         return curSeason.episodes
           .map((ep) => `
@@ -777,30 +816,39 @@ export class MovieBrowser {
           });
         };
 
+        const loadAndDisplaySeason = async (sNum) => {
+          epGrid.innerHTML = renderEpisodesHtml(sNum);
+          await fetchSeasonEpisodes(sNum);
+          epGrid.innerHTML = renderEpisodesHtml(sNum);
+          bindEpClicks();
+        };
+
         tabsContainer.querySelectorAll('.sb-series-tab').forEach((tab) => {
-          tab.addEventListener('click', () => {
+          tab.addEventListener('click', async () => {
             tabsContainer.querySelectorAll('.sb-series-tab').forEach((t) => t.classList.remove('active'));
             tab.classList.add('active');
             selectedSeasonNumber = Number(tab.getAttribute('data-season-num'));
-            epGrid.innerHTML = renderEpisodesHtml(selectedSeasonNumber);
-            bindEpClicks();
+            await loadAndDisplaySeason(selectedSeasonNumber);
           });
         });
 
-        bindEpClicks();
+        // Trigger immediate fetch for the initially selected season
+        loadAndDisplaySeason(selectedSeasonNumber);
       }
 
       const watchBtn = modalBackdrop.querySelector('#sb-btn-watch');
       if (watchBtn && canSelect) {
-        watchBtn.addEventListener('click', () => {
+        watchBtn.addEventListener('click', async () => {
           modalBackdrop.classList.remove('open');
           if (isTv) {
             const firstSeason = seasons[0];
-            const firstEp = firstSeason?.episodes?.[0];
+            const sNum = firstSeason?.seasonNumber || 1;
+            const epList = await fetchSeasonEpisodes(sNum);
+            const firstEp = epList?.[0];
             this.selectMovie({
               ...d,
               type: 'tv',
-              season: firstSeason?.seasonNumber || 1,
+              season: sNum,
               episode: firstEp?.episodeNumber || 1,
               title: `${d.title} - S01E01${firstEp ? ' - ' + firstEp.name : ''}`,
               episodeTitle: firstEp?.name || 'Episode 1',
