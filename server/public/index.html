@@ -1828,6 +1828,9 @@
                 <span id="drm-toolbar-title" style="font-size: 12px; color: #fff; font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Playing</span>
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="btn btn-secondary" id="btn-drm-episodes-toggle" onclick="toggleEpisodes()" title="Episodes & Seasons (E)" style="display: none; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 700; background: rgba(99, 102, 241, 0.25); border: 1px solid rgba(99, 102, 241, 0.5); color: #a5b4fc; border-radius: 6px;">
+                  🎞️ Episodes
+                </button>
                 <button type="button" class="btn btn-secondary" id="btn-drm-fullscreen-toggle" onclick="toggleDrmFullscreen()" title="Toggle Fullscreen vs Split Chat" style="padding: 4px 10px; font-size: 11px; font-weight: 700;">
                   ⛶ Fullscreen
                 </button>
@@ -1884,6 +1887,9 @@
             </button>
             <button class="btn btn-primary browse-trigger-btn" id="btn-browse-movies" onclick="toggleMovieBrowser(true)" title="Browse movies & shows to watch together">
               🎬 Browse Titles
+            </button>
+            <button class="btn btn-secondary" id="btn-theater-episodes" onclick="toggleEpisodes()" title="Select Season & Episode" style="display: none; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-weight: 700; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.45); color: #c7d2fe; border-radius: 10px;">
+              🎞️ Episodes
             </button>
             <div class="player-info-meta">
               <div class="movie-title" id="theater-title">Movie Playing</div>
@@ -2382,10 +2388,16 @@
       const drmCard = document.getElementById('drm-theater-card');
       const playerEl = document.getElementById('media-player');
       const videoWrapper = document.querySelector('.video-wrapper');
+      const drmEpBtn = document.getElementById('btn-drm-episodes-toggle');
+      const theaterEpBtn = document.getElementById('btn-theater-episodes');
 
       if (videoWrapper) videoWrapper.classList.add('drm-active');
       if (playerEl) playerEl.style.display = 'none';
       if (drmCard) drmCard.style.display = 'none';
+
+      const isTv = currentRoom?.video?.type === 'tv';
+      if (drmEpBtn) drmEpBtn.style.display = isTv ? 'inline-flex' : 'none';
+      if (theaterEpBtn) theaterEpBtn.style.display = isTv ? 'inline-flex' : 'none';
 
       const provLower = (provider || 'vidlink').toLowerCase();
       if (badge) {
@@ -2704,9 +2716,12 @@
         };
 
         const epBtn = document.getElementById('btn-player-episodes');
-        if (epBtn) {
-          epBtn.style.display = roomData.video.type === 'tv' ? 'inline-flex' : 'none';
-        }
+        const theaterEpBtn = document.getElementById('btn-theater-episodes');
+        const drmEpBtn = document.getElementById('btn-drm-episodes-toggle');
+        const isTv = roomData.video.type === 'tv';
+        if (epBtn) epBtn.style.display = isTv ? 'inline-flex' : 'none';
+        if (theaterEpBtn) theaterEpBtn.style.display = isTv ? 'inline-flex' : 'none';
+        if (drmEpBtn) drmEpBtn.style.display = isTv ? 'inline-flex' : 'none';
 
         if (roomData.video.type === 'tv' && roomData.video.tmdbId) {
           partyPlayer._loadSeriesSeasonsForDrawer(roomData.video.tmdbId);
@@ -2854,17 +2869,35 @@
 
     function updateControlPermissions() {
       const browseBtn = document.getElementById('btn-browse-movies');
-      if (!browseBtn || !currentRoom) return;
+      const epBtn = document.getElementById('btn-theater-episodes');
+      const drmEpBtn = document.getElementById('btn-drm-episodes-toggle');
+      if (!currentRoom) return;
+
+      const isTv = currentRoom.video?.type === 'tv';
+      if (epBtn) epBtn.style.display = isTv ? 'inline-flex' : 'none';
+      if (drmEpBtn) drmEpBtn.style.display = isTv ? 'inline-flex' : 'none';
+
+      if (!browseBtn) return;
 
       const canControl = currentRoom.shared_controls !== false || localUser.isOwner;
       if (!canControl) {
         browseBtn.classList.add('disabled');
         browseBtn.title = 'Only the host can change the movie';
         browseBtn.onclick = () => alert('Only the host can change the movie in this room');
+        if (epBtn) {
+          epBtn.classList.add('disabled');
+          epBtn.title = 'Only the host can change the episode';
+          epBtn.onclick = () => alert('Only the host can change the episode in this room');
+        }
       } else {
         browseBtn.classList.remove('disabled');
         browseBtn.title = 'Browse movies & shows to watch together';
         browseBtn.onclick = () => toggleMovieBrowser(true);
+        if (epBtn) {
+          epBtn.classList.remove('disabled');
+          epBtn.title = 'Select Season & Episode';
+          epBtn.onclick = () => toggleEpisodes();
+        }
       }
     }
 
