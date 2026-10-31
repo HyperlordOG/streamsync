@@ -2764,14 +2764,18 @@
       if (videoWrapper) videoWrapper.classList.add('drm-active');
       if (playerEl) playerEl.style.display = 'none';
 
-      // If URL explicitly provided (from room data), use it directly
-      let nekoUrl = url;
-      if (!nekoUrl || nekoUrl === 'neko') {
-        try {
-          const res = await fetch('/api/neko-url');
-          if (res.ok) { const d = await res.json(); nekoUrl = d.url; }
-        } catch {}
+      // Always fetch latest live virtual browser URL from /api/neko-url for dynamic recovery
+      let nekoUrl = null;
+      try {
+        const res = await fetch('/api/neko-url');
+        if (res.ok) {
+          const d = await res.json();
+          if (d.url) nekoUrl = d.url;
+        }
+      } catch (err) {
+        console.warn('[VirtualBrowser] Fallback to room url:', err);
       }
+      if (!nekoUrl) nekoUrl = url;
 
       if (iframe && nekoUrl) iframe.src = buildNekoAutoLoginUrl(nekoUrl);
       const openSiteBtn = document.getElementById('btn-drm-open-site');
@@ -2801,9 +2805,20 @@
       if (btn) btn.textContent = isFull ? '🗗 Split / Chat' : '⛶ Fullscreen';
     }
 
-    function reloadDrmPlayer() {
+    async function reloadDrmPlayer() {
       const iframe = document.getElementById('drm-embedded-iframe');
-      if (iframe && iframe.src) iframe.src = iframe.src;
+      if (!iframe) return;
+      try {
+        const res = await fetch('/api/neko-url');
+        if (res.ok) {
+          const d = await res.json();
+          if (d.url) {
+            iframe.src = buildNekoAutoLoginUrl(d.url);
+            return;
+          }
+        }
+      } catch {}
+      if (iframe.src) iframe.src = iframe.src;
     }
 
     function closeInAppWebSheet(clearSrc = true) {
