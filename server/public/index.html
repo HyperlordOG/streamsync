@@ -2518,10 +2518,18 @@
 
     function buildNekoAutoLoginUrl(baseUrl) {
       if (!baseUrl) return '';
+      if (baseUrl.includes('token=')) return baseUrl;
       const userName = localUser?.display_name || localUser?.name || 'Guest';
       if (baseUrl.includes('pwd=')) return baseUrl;
       const sep = baseUrl.includes('?') ? '&' : '?';
       return `${baseUrl}${sep}usr=${encodeURIComponent(userName)}&pwd=watch`;
+    }
+
+    async function getAuthedNekoUrl(customUser) {
+      const u = encodeURIComponent(customUser || localUser?.display_name || localUser?.name || 'Host');
+      const res = await fetch('/api/neko-url?user=' + u);
+      if (!res.ok) throw new Error('Virtual browser service currently offline');
+      return await res.json();
     }
 
     /**
@@ -2535,9 +2543,7 @@
       localUser.isOwner = true;
 
       try {
-        const resNeko = await fetch('/api/neko-url');
-        if (!resNeko.ok) throw new Error('Virtual browser service currently offline');
-        const { url: nekoBase } = await resNeko.json();
+        const { url: authedUrl, base_url: nekoBase } = await getAuthedNekoUrl(hostName);
 
         const res = await fetch('/api/join', {
           method: 'POST',
@@ -2547,7 +2553,7 @@
             display_name: hostName,
             shared_controls: true,
             video: {
-              url: nekoBase,
+              url: authedUrl,
               provider: 'neko',
               title: `Virtual Browser — ${title}`,
               thumbnail: '',
@@ -2558,7 +2564,7 @@
         const data = await res.json();
         if (!data.party_id) throw new Error('Failed to create room');
 
-        enterTheater(data, nekoBase);
+        enterTheater(data, authedUrl);
       } catch (err) {
         alert('Could not start Virtual Browser party: ' + err.message);
       }
@@ -2575,6 +2581,15 @@
       const iframe = document.getElementById('drm-embedded-iframe');
       const vbBtn = document.getElementById('btn-virtual-browser-toggle');
       const openSiteBtn = document.getElementById('btn-drm-open-site');
+      const container = document.getElementById('drm-player-container');
+      const playerEl = document.getElementById('media-player');
+      const drmCardEl = document.getElementById('drm-theater-card');
+      const videoWrapper = document.querySelector('.video-wrapper');
+
+      if (videoWrapper) videoWrapper.classList.add('drm-active');
+      if (playerEl) playerEl.style.display = 'none';
+      if (drmCardEl) drmCardEl.style.display = 'none';
+      if (container) container.style.display = 'block';
 
       if (badge) {
         badge.textContent = '⏳ Connecting...';
@@ -2583,13 +2598,11 @@
       }
 
       try {
-        const res = await fetch('/api/neko-url');
-        if (!res.ok) throw new Error('Virtual browser not configured');
-        const { url } = await res.json();
+        const { url: authedUrl, base_url } = await getAuthedNekoUrl();
 
-        // Load Neko into the theater iframe with auto-login query
+        // Load Neko into the theater iframe
         if (iframe) {
-          iframe.src = buildNekoAutoLoginUrl(url);
+          iframe.src = authedUrl;
         }
 
         if (badge) {
@@ -2605,7 +2618,7 @@
           ws.send(JSON.stringify({
             type: 'video_change',
             payload: {
-              url: url,
+              url: base_url || authedUrl,
               provider: 'neko',
               title: 'Virtual Browser — Frame-Perfect Sync',
               thumbnail: '',
@@ -2709,12 +2722,9 @@
       }
 
       try {
-        const res = await fetch('/api/neko-url');
-        if (!res.ok) throw new Error('Neko not configured');
-        const { url: nekoBase } = await res.json();
+        const { url: authedUrl, base_url } = await getAuthedNekoUrl();
 
-        // Load Neko with auto-login parameters (no manual password needed)
-        if (iframe) iframe.src = buildNekoAutoLoginUrl(nekoBase);
+        if (iframe) iframe.src = authedUrl;
 
         const openSiteBtn = document.getElementById('btn-drm-open-site');
         if (openSiteBtn) openSiteBtn.style.display = 'inline-flex';
@@ -2735,7 +2745,7 @@
           ws.send(JSON.stringify({
             type: 'video_change',
             payload: {
-              url: nekoBase,
+              url: base_url || authedUrl,
               provider: 'neko',
               title: `Virtual Browser — ${targetUrl}`,
               thumbnail: '',
@@ -2758,26 +2768,32 @@
       const container = document.getElementById('drm-player-container');
       const badge = document.getElementById('drm-toolbar-badge');
       const playerEl = document.getElementById('media-player');
+      const drmCardEl = document.getElementById('drm-theater-card');
       const videoWrapper = document.querySelector('.video-wrapper');
       const vbBtn = document.getElementById('btn-virtual-browser-toggle');
 
       if (videoWrapper) videoWrapper.classList.add('drm-active');
       if (playerEl) playerEl.style.display = 'none';
+      if (drmCardEl) drmCardEl.style.display = 'none';
+      if (container) container.style.display = 'block';
 
-      // Always fetch latest live virtual browser URL from /api/neko-url for dynamic recovery
-      let nekoUrl = null;
+      if (badge) {
+        badge.textContent = '⏳ Connecting...';
+        badge.style.background = 'rgba(251, 191, 36, 0.2)';
+        badge.style.color = '#fbbf24';
+      }
+
+      // Always fetch latest live virtual browser URL from /api/neko-url with user-specific session token
+      let authedNekoUrl = null;
       try {
-        const res = await fetch('/api/neko-url');
-        if (res.ok) {
-          const d = await res.json();
-          if (d.url) nekoUrl = d.url;
-        }
+        const d = await getAuthedNekoUrl();
+        if (d && d.url) authedNekoUrl = d.url;
       } catch (err) {
         console.warn('[VirtualBrowser] Fallback to room url:', err);
       }
-      if (!nekoUrl) nekoUrl = url;
+      if (!authedNekoUrl) authedNekoUrl = url;
 
-      if (iframe && nekoUrl) iframe.src = buildNekoAutoLoginUrl(nekoUrl);
+      if (iframe && authedNekoUrl) iframe.src = buildNekoAutoLoginUrl(authedNekoUrl);
       const openSiteBtn = document.getElementById('btn-drm-open-site');
       if (openSiteBtn) openSiteBtn.style.display = 'inline-flex';
       if (badge) {
@@ -2786,7 +2802,6 @@
         badge.style.color = '#34d399';
       }
       if (vbBtn) vbBtn.style.display = 'none';
-      if (container) container.style.display = 'block';
       const sheet = document.getElementById('inapp-websheet-overlay');
       if (sheet) sheet.style.display = 'none';
     }
@@ -2809,13 +2824,10 @@
       const iframe = document.getElementById('drm-embedded-iframe');
       if (!iframe) return;
       try {
-        const res = await fetch('/api/neko-url');
-        if (res.ok) {
-          const d = await res.json();
-          if (d.url) {
-            iframe.src = buildNekoAutoLoginUrl(d.url);
-            return;
-          }
+        const d = await getAuthedNekoUrl();
+        if (d && d.url) {
+          iframe.src = d.url;
+          return;
         }
       } catch {}
       if (iframe.src) iframe.src = iframe.src;

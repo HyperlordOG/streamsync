@@ -153,14 +153,43 @@ export async function registerRoutes(fastify) {
 
 
   // ── GET /api/neko-url ─────────────────────────────────────────────────────
-  // Returns the current Neko virtual browser WebRTC tunnel URL.
-  // Set NEKO_URL env var on VPS to point at the active Cloudflare tunnel.
+  // Returns the current Neko virtual browser WebRTC tunnel URL with auto-auth session token.
   fastify.get('/api/neko-url', async (request, reply) => {
     const nekoUrl = process.env.NEKO_URL || null;
     if (!nekoUrl) {
       return reply.code(503).send({ error: 'Virtual browser not configured', code: 'NEKO_NOT_CONFIGURED' });
     }
-    return reply.send({ url: nekoUrl, status: 'active' });
+
+    const username = request.query?.user || 'Guest';
+    let token = null;
+
+    try {
+      const loginRes = await fetch(`${nekoUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: username,
+          password: process.env.NEKO_PASSWORD || 'watch',
+        }),
+        signal: AbortSignal.timeout(4000),
+      });
+
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        token = data.token;
+      }
+    } catch (err) {
+      console.warn('[Neko] Could not auto-generate token:', err.message);
+    }
+
+    const authedUrl = token ? `${nekoUrl}/?token=${token}` : nekoUrl;
+
+    return reply.send({
+      url: authedUrl,
+      base_url: nekoUrl,
+      token,
+      status: 'active'
+    });
   });
 
   // ── GET /api/health ───────────────────────────────────────────────────────
